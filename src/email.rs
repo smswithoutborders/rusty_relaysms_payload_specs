@@ -1,5 +1,11 @@
 use crate::bit_utils;
 
+type Result<T> = std::result::Result<T, ContentError>;
+
+pub enum ContentError {
+    BitParsingError,
+}
+
 pub struct Email {
     i_subject: bool,
     i_from: bool,
@@ -38,31 +44,54 @@ impl Email {
         }
     }
 
-    pub fn deserialize(data: &[u8]) -> Email {
+    // pub fn serialize(&self) -> *mut [u8] {
+    //
+    // }
+
+    pub fn deserialize(data: &[u8]) -> Result<Email> {
         let indicator = data[0];
         let i_subject = bit_utils::is_bit_on(&indicator, 0);
         let i_from = bit_utils::is_bit_on(&indicator, 1);
 
-        let len_to = bit_utils::bit_wrap(
+        let len_to = match bit_utils::bit_wrap(
             &data[0],
             2,
             &data[1],
             0
-        );
-        let len_body: u16 = bit_utils::bit_wrap(
+        ) {
+            Ok(n) =>  n,
+            Err(e) => {
+                println!("{:?}", e);
+                return Err(ContentError::BitParsingError);
+            }
+        };
+
+        let len_body = match bit_utils::bit_wrap(
             &data[1],
             1,
             &data[2],
             3
-        );
+        ) {
+            Ok(n) =>  n,
+            Err(e) => {
+                println!("{:?}", e);
+                return Err(ContentError::BitParsingError);
+            }
+        };
 
         let len_subject: u8 = if i_subject {
-            bit_utils::bit_wrap(
+            match bit_utils::bit_wrap(
                 &data[2],
                 3,
                 &data[3],
                 2
-            )
+            ) {
+                Ok(n) =>  n,
+                Err(e) => {
+                    println!("{:?}", e);
+                    return Err(ContentError::BitParsingError);
+                }
+            }
         } else { 0 };
 
         let mut current_index: usize = 2;
@@ -95,7 +124,7 @@ impl Email {
         let subject = next_slice(i_subject, len_subject);
         let from = next_slice(i_from, len_from);
 
-        Email {
+        Ok(Email {
             i_subject,
             i_from,
             len_from,
@@ -110,6 +139,6 @@ impl Email {
             //     Some(String::from_utf8(from.to_vec()).unwrap())
             // } else { None },
             from: from.map(|b| String::from_utf8(b.to_vec()).unwrap()),
-        }
+        })
     }
 }
