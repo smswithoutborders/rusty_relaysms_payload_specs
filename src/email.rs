@@ -44,9 +44,14 @@ impl Email {
         }
     }
 
-    // pub fn serialize(&self) -> *mut [u8] {
-    //
-    // }
+    pub fn serialize(&self) -> *mut [u8] {
+        let mut indicator: u8 = 0;
+
+        if self.i_subject { indicator = bit_utils::turn_bit_on( &indicator, 0 ) }
+        if self.i_from { indicator = bit_utils::turn_bit_on( &indicator, 1 ) }
+        
+        todo!()
+    }
 
     pub fn deserialize(data: &[u8]) -> Result<Email> {
         let indicator = data[0];
