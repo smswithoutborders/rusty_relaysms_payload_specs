@@ -25,7 +25,7 @@ pub fn bit_wrap<T: From<u8>>(
         return Err(BitParsingError::IndexOutOfBounds);
     }
 
-    if ((8 - byte1_start_index) + byte2_end_index) > 8 {
+    if ((8 - byte1_start_index) + byte2_end_index) > 7 {
         return Err(BitParsingError::ExpectedLargerThanOctet);
     }
 
