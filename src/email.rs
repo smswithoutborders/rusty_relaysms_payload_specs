@@ -49,7 +49,16 @@ impl Email {
 
         if self.i_subject { indicator = bit_utils::turn_bit_on( &indicator, 0 ) }
         if self.i_from { indicator = bit_utils::turn_bit_on( &indicator, 1 ) }
-        
+
+        let low_len_to = bit_utils::get_bits(&self.len_to, 0, 5);
+        indicator = bit_utils::put_value(&indicator, 2, low_len_to, 0);
+        let mut byte1 = bit_utils::get_bits(&self.len_to, 5, 7);
+
+        let len_body_bytes = self.len_body.to_le_bytes();
+        let low_len_body = len_body_bytes[0];
+        let high_len_body = len_body_bytes[1];
+        byte1 = bit_utils::put_value(&byte1, 2, low_len_body, 2);
+
         todo!()
     }
 
