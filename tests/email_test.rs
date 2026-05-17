@@ -14,7 +14,7 @@ fn test_email_init() {
         &from_id
     ).unwrap();
 
-    let serialized = email.serialize();
+    let serialized = email.serialize().unwrap();
     let deserialized = Email::deserialize(serialized.as_slice()).unwrap();
 
     assert_eq!(email, deserialized);
@@ -27,7 +27,7 @@ fn test_email_init() {
         &from_id
     ).unwrap();
 
-    let serialized = email1.serialize();
+    let serialized = email1.serialize().unwrap();
     let deserialized = Email::deserialize(serialized.as_slice()).unwrap();
     assert_eq!(email1, deserialized);
     assert_eq!((to.len() + body.len() + 1 + 2), serialized.len());
