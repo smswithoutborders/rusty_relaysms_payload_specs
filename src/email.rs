@@ -6,6 +6,7 @@ type Result<T> = std::result::Result<T, ContentError>;
 pub enum ContentError {
     FromIdGreaterThan6Bits,
     BitParsingError,
+    InvalidUtf8
 }
 
 
@@ -25,10 +26,10 @@ impl Email {
     pub fn new(
         to: &str,
         body: &str,
-        subject: &str,
+        subject: Option<&str>,
         from_id: &u8,
     ) -> Result<Email> {
-        let len_subject = subject.len() as u8;
+        let len_subject = subject.unwrap_or("").len() as u8;
         if from_id > &(2u8.pow(6) - 1) {
             return Err(ContentError::FromIdGreaterThan6Bits);
         }
@@ -41,40 +42,47 @@ impl Email {
             from_id: Option::from(*from_id),
             to: to.to_string(),
             body: body.to_string(),
-            subject: Option::from(subject.to_string()),
+            subject: subject.map(|s| s.to_string()),
         })
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        let mut bytes : Vec<u8> = Vec::new();
+        let mut bytes: Vec<u8> = Vec::new();
         let mut indicator: u8 = 0;
 
-        if self.i_subject { indicator = bit_utils::turn_bit_on( &indicator, 0 ) }
-        // len to
+        if self.i_subject { indicator = bit_utils::turn_bit_on(&indicator, 0) }
         indicator = bit_utils::put_value(&indicator, 1, self.len_to, 1);
         bytes.push(indicator);
 
         let len_body_bytes = self.len_body.to_le_bytes();
-        let low_len_body = len_body_bytes[0];
-        bytes.push(low_len_body);
+        bytes.push(len_body_bytes[0]);
 
-        let mut high_len_body = bit_utils::get_bits(
-            &len_body_bytes[1], 0, 1);
-        high_len_body = bit_utils::put_value(&high_len_body, 2, self.len_subject, 2);
-        bytes.push(high_len_body);
+        if self.i_subject {
+            // byte 2: bits 0-1 = high len_body, bits 2-7 = low 6 bits of len_subject
+            let mut byte2 = bit_utils::get_bits(&len_body_bytes[1], 0, 1);
+            byte2 = bit_utils::put_value(&byte2, 2, self.len_subject, 2);
+            bytes.push(byte2);
 
-        let mut high_len_subject = bit_utils::get_bits(
-            &self.len_subject, 6, 7);
-
-        if self.from_id.is_some() {
-            high_len_subject = bit_utils::put_value(
-                &high_len_subject, 2, self.from_id.unwrap(), 2);
+            // byte 3: bits 0-1 = high 2 bits of len_subject, bits 2-7 = from_id
+            let mut byte3 = bit_utils::get_bits(&self.len_subject, 6, 7);
+            if let Some(id) = self.from_id {
+                byte3 = bit_utils::put_value(&byte3, 2, id, 2);
+            }
+            bytes.push(byte3);
+        } else {
+            // byte 2: bits 0-1 = high len_body, bits 2-7 = from_id (no len_subject bytes needed)
+            let mut byte2 = bit_utils::get_bits(&len_body_bytes[1], 0, 1);
+            if let Some(id) = self.from_id {
+                byte2 = bit_utils::put_value(&byte2, 2, id, 2);
+            }
+            bytes.push(byte2);
+            // no byte 3 — from_id fits in byte 2, saving one byte
         }
-        bytes.push(high_len_subject);
+
         bytes.extend_from_slice(self.to.as_bytes());
         bytes.extend_from_slice(self.body.as_bytes());
         if self.i_subject {
-            bytes.extend_from_slice(self.subject.clone().unwrap().as_bytes());
+            bytes.extend_from_slice(self.subject.as_deref().unwrap_or("").as_bytes());
         }
         bytes
     }

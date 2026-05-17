@@ -10,7 +10,7 @@ fn test_email_init() {
     let email = Email::new(
         to,
         body,
-        subject,
+        Option::from(subject),
         &from_id
     ).unwrap();
 
@@ -18,6 +18,18 @@ fn test_email_init() {
     let deserialized = Email::deserialize(serialized.as_slice()).unwrap();
 
     assert_eq!(email, deserialized);
-
     assert_eq!((to.len() + body.len() + subject.len() + 1 + 3), serialized.len());
+
+    let email1 = Email::new(
+        to,
+        body,
+        None,
+        &from_id
+    ).unwrap();
+
+    let serialized = email1.serialize();
+    let deserialized = Email::deserialize(serialized.as_slice()).unwrap();
+    assert_eq!(email1, deserialized);
+    assert_eq!((to.len() + body.len() + 1 + 2), serialized.len());
+
 }
