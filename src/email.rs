@@ -1,149 +1,102 @@
-use crate::bit_utils;
+use std::any::Any;
+use crate::{bit_utils, ContentError, Contents};
 
 type Result<T> = std::result::Result<T, ContentError>;
 
-pub enum ContentError {
-    BitParsingError,
-}
-
-pub struct Email {
-    i_subject: bool,
-    i_from: bool,
-    len_to: u8,
-    len_body: u16,
+#[derive(PartialEq, Debug)]
+pub struct Emails {
+    from_id: u8,
     len_subject: u8,
-    len_from: u8,
-
+    len_to: u8,
     to: String,
     body: String,
     subject: Option<String>,
-    from: Option<String>,
 }
 
-impl Email {
+impl Emails {
     pub fn new(
         to: &str,
         body: &str,
-        subject: &str,
-        from: &str,
-    ) -> Email {
-        let len_subject = subject.len() as u8;
-        let len_from = from.len() as u8;
+        subject: Option<&str>,
+        from_id: &u8,
+    ) -> Result<Emails> {
+        if from_id > &(2u8.pow(3) - 1) {
+            return Err(ContentError::FromIdTooLarge);
+        }
 
-        Email {
-            i_subject: len_subject > 0,
-            i_from: len_from > 0,
+        let len_subject = subject.unwrap_or("").len() as u8;
+        if len_subject > (2u8.pow(5) - 1) {
+            return Err(ContentError::SubjectLenTooLarge);
+        }
+
+        if to.len() > u8::MAX as usize {
+            return Err(ContentError::ToTooLarge);
+        }
+
+        Ok(Emails {
             len_to: to.len() as u8,
-            len_body: body.len() as u16,
             len_subject,
-            len_from,
+            from_id: *from_id,
             to: to.to_string(),
             body: body.to_string(),
-            subject: Option::from(subject.to_string()),
-            from: Option::from(from.to_string()),
-        }
-    }
-
-    pub fn serialize(&self) -> *mut [u8] {
-        let mut indicator: u8 = 0;
-
-        if self.i_subject { indicator = bit_utils::turn_bit_on( &indicator, 0 ) }
-        if self.i_from { indicator = bit_utils::turn_bit_on( &indicator, 1 ) }
-        
-        todo!()
-    }
-
-    pub fn deserialize(data: &[u8]) -> Result<Email> {
-        let indicator = data[0];
-        let i_subject = bit_utils::is_bit_on(&indicator, 0);
-        let i_from = bit_utils::is_bit_on(&indicator, 1);
-
-        let len_to = match bit_utils::bit_wrap(
-            &data[0],
-            2,
-            &data[1],
-            0
-        ) {
-            Ok(n) =>  n,
-            Err(e) => {
-                println!("{:?}", e);
-                return Err(ContentError::BitParsingError);
-            }
-        };
-
-        let len_body = match bit_utils::bit_wrap(
-            &data[1],
-            1,
-            &data[2],
-            3
-        ) {
-            Ok(n) =>  n,
-            Err(e) => {
-                println!("{:?}", e);
-                return Err(ContentError::BitParsingError);
-            }
-        };
-
-        let len_subject: u8 = if i_subject {
-            match bit_utils::bit_wrap(
-                &data[2],
-                3,
-                &data[3],
-                2
-            ) {
-                Ok(n) =>  n,
-                Err(e) => {
-                    println!("{:?}", e);
-                    return Err(ContentError::BitParsingError);
-                }
-            }
-        } else { 0 };
-
-        let mut current_index: usize = 2;
-        let len_from = if i_from {
-            if i_subject {
-                current_index += 1;
-                bit_utils::get_bits(&data[3], 3, 7)
-            } else {
-                bit_utils::get_bits(&data[2], 3, 7)
-            }
-        } else { 0 };
-
-        let to = data[current_index..current_index + len_to as usize].to_vec();
-        current_index += len_to as usize;
-
-        let body = data[current_index..current_index + len_body as usize].to_vec();
-        current_index += len_body as usize;
-
-        let mut next_slice = |condition: bool, length: u8| -> Option<&[u8]> {
-            if condition {
-                let len = length as usize;
-                let slice = &data[current_index..current_index + len];
-                current_index += len;
-                Some(slice)
-            } else {
-                None
-            }
-        };
-
-        let subject = next_slice(i_subject, len_subject);
-        let from = next_slice(i_from, len_from);
-
-        Ok(Email {
-            i_subject,
-            i_from,
-            len_from,
-            len_to,
-            len_subject,
-            len_body,
-
-            to: String::from_utf8(to).unwrap(),
-            body: String::from_utf8(body).unwrap(),
-            subject: subject.map(|b| String::from_utf8(b.to_vec()).unwrap()),
-            // from: if let Some(from) = from {
-            //     Some(String::from_utf8(from.to_vec()).unwrap())
-            // } else { None },
-            from: from.map(|b| String::from_utf8(b.to_vec()).unwrap()),
+            subject: subject.map(|s| s.to_string()),
         })
     }
+}
+
+impl Contents for Emails {
+    fn serialize(&self) -> std::result::Result<Vec<u8>, ContentError> {
+        let mut bytes: Vec<u8> = Vec::new(); // TODO: put size here
+
+        let index_0 = bit_utils::put_value(
+            &self.from_id, 3, self.len_subject, 2);
+        bytes.push(index_0);
+        bytes.push(self.len_to);
+
+        bytes.extend_from_slice(self.to.as_bytes());
+        let subject_bytes = self.subject.as_deref().unwrap_or("").as_bytes();
+        if subject_bytes.len() > 0 {
+            bytes.extend_from_slice(subject_bytes);
+        }
+        bytes.extend_from_slice(self.body.as_bytes());
+        Ok(bytes)
+    }
+
+    fn deserialize(data: &[u8]) -> std::result::Result<Emails, ContentError> {
+        let from_id = bit_utils::get_bits(&data[0], 0, 2);
+        let len_subject = bit_utils::get_bits(&data[0], 3, 7);
+        let len_to = data[1];
+
+        let mut current_index: usize = 2;
+        let to = data[2..current_index + len_to as usize].to_vec();
+        current_index += len_to as usize;
+
+        let subject = if len_subject > 0 {
+            let slice = data[current_index..current_index + len_subject as usize].to_vec();
+            current_index += len_subject as usize;
+            match String::from_utf8(slice) {
+                Ok(s) => Some(s),
+                Err(_) => None
+            }
+        } else { None };
+
+        let body = data[current_index..].to_vec();
+
+        Ok(Emails {
+            from_id,
+            len_subject,
+            len_to,
+            to: String::from_utf8(to).unwrap(),
+            body: String::from_utf8(body).unwrap(),
+            subject
+        })
+    }
+
+    fn equals(&self, other: &dyn Contents) -> bool {
+        other.as_any()
+            .downcast_ref::<Emails>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn Any { self }
 }

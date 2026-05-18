@@ -25,7 +25,7 @@ pub fn bit_wrap<T: From<u8>>(
         return Err(BitParsingError::IndexOutOfBounds);
     }
 
-    if ((8 - byte1_start_index) + byte2_end_index) > 8 {
+    if ((8 - byte1_start_index) + byte2_end_index) > 7 {
         return Err(BitParsingError::ExpectedLargerThanOctet);
     }
 
@@ -70,7 +70,8 @@ fn test_is_bit_on() {
 }
 
 pub fn get_bits(data: &u8, start_index: u8, end_index: u8) -> u8 {
-    let mask = ((1 << (end_index - start_index + 1)) - 1) << start_index;
+    let offset = ((end_index - (start_index)) + 1) as usize;
+    let mask = ((1 << offset) - 1) << start_index;
     (*data & mask) >> start_index
 }
 
@@ -79,6 +80,11 @@ fn test_get_bits() {
     let value: u8 = 23;
     let expected: u8 = 7;
     let output = get_bits(&value, 0, 2);
+    assert_eq!(expected, output);
+
+    let value: u8 = 103;
+    let expected: u8 = 39;
+    let output = get_bits(&value, 0, 5);
     assert_eq!(expected, output);
 }
 
@@ -93,3 +99,27 @@ fn test_turn_bit_on() {
     let output = turn_bit_on(&value, 1);
     assert_eq!(expected, output);
 }
+
+pub fn put_value(low: &u8, start_index: u8, high: u8, offset: u8) -> u8 {
+    let offset_value = if offset > 0 {
+        let end_index = 7 - offset;
+        get_bits(&high, 0, end_index)
+    } else { high };
+    low | (offset_value << start_index)
+}
+
+#[test]
+fn test_put_value() {
+    let byte1: u8 = 7;
+    let byte2: u8 = 8;
+    let expected: u8 = 71;
+    let output = put_value(&byte1, 3, byte2, 0);
+    assert_eq!(expected, output);
+
+    let byte1: u8 = 3;
+    let byte2: u8 = 103;
+    let expected: u8 = 159;
+    let output = put_value(&byte1, 2, byte2, 2);
+    assert_eq!(expected, output);
+}
+
