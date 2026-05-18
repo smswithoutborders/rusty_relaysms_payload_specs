@@ -1,3 +1,4 @@
+use std::any::Any;
 use crate::{bit_utils, ContentError, Contents};
 
 type Result<T> = std::result::Result<T, ContentError>;
@@ -90,4 +91,12 @@ impl Contents for Emails {
             subject
         })
     }
+
+    fn equals(&self, other: &dyn Contents) -> bool {
+        other.as_any()
+            .downcast_ref::<Emails>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn Any { self }
 }

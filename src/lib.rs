@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt::Debug;
 use crate::email::Emails;
 
@@ -19,13 +20,8 @@ mod tests {
 
 pub mod email;
 pub mod bit_utils;
-mod transport;
+pub mod transport;
 
-
-
-#[derive(Debug)]
-pub enum TransportError {
-}
 
 #[derive(Debug)]
 pub enum ContentError {
@@ -40,4 +36,8 @@ pub trait Contents : Debug {
     fn serialize(&self) -> Result<Vec<u8>, ContentError>;
     fn deserialize(data: &[u8]) -> Result<Emails, ContentError>
     where Self: Sized;
+
+    fn equals(&self, other: &dyn Contents) -> bool;
+
+    fn as_any(&self) -> &dyn Any;
 }

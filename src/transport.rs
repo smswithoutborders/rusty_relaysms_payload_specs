@@ -1,15 +1,33 @@
-use crate::{bit_utils, Contents, TransportError};
+use crate::{bit_utils, Contents};
 use crate::email::Emails;
 
 type Result<T> = std::result::Result<T, TransportError>;
+
+#[derive(Debug)]
+pub enum TransportError {
+    VersionTooLarge,
+    EncryptionIdTooLarge,
+}
+
 #[derive(Debug)]
 pub struct Transport {
     i_did: bool,
     version: u8,
     encryption_id: u8,
     key_id: u8,
-    device_id: Option<u16>,
+    device_id: Option<Vec<u8>>,
     payload_content: Box<dyn Contents>,
+}
+
+impl PartialEq for Transport {
+    fn eq(&self, other: &Self) -> bool {
+        self.i_did == other.i_did
+            && self.version == other.version
+            && self.encryption_id == other.encryption_id
+            && self.key_id == other.key_id
+            && self.device_id == other.device_id
+            && self.payload_content.equals(other.payload_content.as_ref())
+    }
 }
 
 impl Transport {
@@ -18,17 +36,25 @@ impl Transport {
         version: u8,
         encryption_id: u8,
         key_id: u8,
-        device_id: Option<u16>,
+        device_id: Option<Vec<u8>>,
         payload_content: Box<dyn Contents>,
-    ) -> Transport {
-        Transport {
+    ) -> Result<Transport> {
+        if version > (2u8.pow(4) -1) {
+            return Err(TransportError::VersionTooLarge);
+        }
+
+        if encryption_id > (2u8.pow(3) -1) {
+            return Err(TransportError::EncryptionIdTooLarge);
+        }
+
+        Ok(Transport {
             i_did,
             version,
             encryption_id,
             key_id,
             device_id,
             payload_content,
-        }
+        })
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>> {
@@ -39,9 +65,7 @@ impl Transport {
         bytes.push(byte1);
         bytes.push(self.key_id);
         if self.device_id.is_some() {
-            let device_id = u16::to_le_bytes(self.device_id.unwrap());
-            bytes.push(device_id[0]);
-            bytes.push(device_id[1]);
+            bytes.extend_from_slice(self.device_id.as_ref().unwrap().as_slice())
         }
         let payload_content = self.payload_content.serialize();
         if payload_content.is_ok() {
@@ -57,8 +81,8 @@ impl Transport {
         let key_id = data[1];
         let mut current_index: usize = 2;
         let device_id = if i_did {
-            let slice = u16::from_le_bytes([data[current_index], data[current_index+1]]);
-            current_index += 1;
+            let slice = data[current_index..current_index + 16].to_vec();
+            current_index += 16;
             Option::from(slice)
         } else { None };
         let payload_content = Emails::deserialize(
