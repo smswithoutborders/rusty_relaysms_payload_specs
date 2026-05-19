@@ -1,8 +1,11 @@
-use std::any::Any;
-use std::fmt::Debug;
 use crate::email::Emails;
+use std::any::Any;
+use std::ffi::{CStr, CString};
+use std::fmt::Debug;
+use std::os::raw::c_char;
 
-pub fn add(left: u64, right: u64) -> u64 {
+#[uniffi::export]
+pub fn add_rust(left: u64, right: u64) -> u64 {
     left + right
 }
 
@@ -13,7 +16,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
+        let result = add_rust(2, 2);
         assert_eq!(result, 4);
     }
 }
@@ -41,3 +44,5 @@ pub trait Contents : Debug {
 
     fn as_any(&self) -> &dyn Any;
 }
+
+uniffi::setup_scaffolding!();  // ← replaces the UDL file

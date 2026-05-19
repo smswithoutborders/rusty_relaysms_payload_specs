@@ -39,7 +39,7 @@ fn test_bit_wrap() {
     let byte1: u8 = 160;
     let byte2: u8 = 27;
     let expected: u8 = 221;
-    let output = bit_wrap(
+    let output: u8 = bit_wrap(
         &byte1,
         5,
         &byte2,
@@ -50,13 +50,13 @@ fn test_bit_wrap() {
     let byte1: u8 = 234;
     let byte2: u8 = 91;
     let expected: u8 = 183;
-    let output = bit_wrap(
+    let output1: u8 = bit_wrap(
         &byte1,
         7,
         &byte2,
         6
     ).unwrap();
-    assert_eq!(expected, output);
+    assert_eq!(expected, output1);
 }
 
 pub fn is_bit_on(data: &u8, index: u8) -> bool {

@@ -3,6 +3,14 @@ name = "relaysms-specs"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name="relaysms_spec_payload"
+crate-type = ["cdylib"]
+
 [dependencies]
-byteorder = "1.5.0"
 rand = "0.10.1"
+uniffi = { version = "0.31.1", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.31.1", features = [ "build" ] }
+

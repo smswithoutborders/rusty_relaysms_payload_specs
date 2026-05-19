@@ -1,0 +1,5 @@
+rust_library {
+    name: "librelaysms_spec_payload",
+    crate_name: ":relaysms_spec_payload",
+    srcs: ["src/libs"],
+}
