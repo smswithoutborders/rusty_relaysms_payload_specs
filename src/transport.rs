@@ -1,5 +1,5 @@
 use crate::{bit_utils, Contents};
-use crate::email::Emails;
+use crate::contents::email::Emails;
 
 type Result<T> = std::result::Result<T, TransportError>;
 

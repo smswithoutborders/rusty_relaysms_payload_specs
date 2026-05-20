@@ -1,8 +1,6 @@
-use crate::email::Emails;
 use std::any::Any;
-use std::ffi::{CStr, CString};
 use std::fmt::Debug;
-use std::os::raw::c_char;
+use crate::contents::email::Emails;
 
 #[uniffi::export]
 pub fn add_rust(left: u64, right: u64) -> u64 {
@@ -21,10 +19,9 @@ mod tests {
     }
 }
 
-pub mod email;
+pub mod contents;
 pub mod bit_utils;
 pub mod transport;
-
 
 #[derive(Debug)]
 pub enum ContentError {

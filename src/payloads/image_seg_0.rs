@@ -1,0 +1,3 @@
+struct ImageSeg0 {
+
+}
