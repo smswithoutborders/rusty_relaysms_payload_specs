@@ -1,10 +1,7 @@
-use std::mem::transmute;
 use std::sync::Arc;
-use crate::{bit_utils, utils};
-use crate::contents::Contents;
-use crate::contents::email::{deserialize_email, init_email};
+use crate::bit_utils;
 use crate::transports::{Transports, TransportsError};
-use crate::transports::TransportsError::{CategoryIdTooLarge, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, SegmentLessThanOne, SessionIdTooLarge, VersionTooLarge};
+use crate::transports::TransportsError::{DeviceIdTooLarge, SessionIdTooLarge};
 
 #[derive(Debug)]
 pub struct TransportAttTrue {
@@ -123,7 +120,35 @@ impl PartialEq for TransportAttTrueN {
 
 impl Transports for TransportAttTrue {
     fn serialize(&self) -> crate::transports::Result<Vec<u8>> {
-        todo!()
+        let mut bytes: Vec<u8> = Vec::new();
+
+        let mut byte1 : u8 = if self.i_did { 1 } else { 0 };
+        if self.i_att { bit_utils::turn_bit_on(&byte1, 1); }
+        if self.i_end { byte1 = bit_utils::turn_bit_on(&byte1, 2); }
+        byte1 = bit_utils::put_value(&byte1, 3, 7, 0);
+        bytes.push(byte1);
+
+        bytes.push(self.seg_num);
+
+        let byte3 = bit_utils::put_value(&self.sess_id, 4, self.k_id, 4);
+        bytes.push(byte3);
+
+        let byte4 = bit_utils::put_value(&self.e_id, 3, self.cat_id, 4);
+        bytes.push(byte4);
+
+        let len_att = u16::to_le_bytes(self.len_att);
+        bytes.push(len_att[0]);
+        bytes.push(len_att[1]);
+
+        if self.device_id.is_some() {
+            bytes.extend_from_slice(self.device_id.clone().unwrap().as_slice());
+        }
+
+        if self.payload.is_some() {
+            bytes.extend_from_slice(self.payload.clone().unwrap().as_slice());
+        }
+
+        Ok(bytes)
     }
 
     fn equals(&self, other: Arc<dyn Transports>) -> bool {
@@ -141,6 +166,3 @@ impl Transports for TransportAttTrueN {
         todo!()
     }
 }
-
-
-

@@ -37,6 +37,9 @@ pub enum TransportsError {
 
     #[error("Empty payload")]
     EmptyPayload,
+    
+    #[error("Error parsing bits")]
+    ErrorParsingBits,
 }
 
 #[uniffi::export(with_foreign)]
