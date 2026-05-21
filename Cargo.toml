@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 rand = "0.10.1"
 uniffi = { version = "0.31.1", features = ["cli"] }
+thiserror = "2.0.18"
 
 [build-dependencies]
 uniffi = { version = "0.31.1", features = [ "build" ] }
