@@ -2,11 +2,13 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use crate::contents::Contents;
 use crate::contents::email::{deserialize_email, init_email, Emails};
-use crate::transports::transport_att::{TransportAtt};
+use crate::transports::transport_att::TransportAtt;
+use crate::transports::transport_att_true::{TransportAttTrue};
 use crate::transports::transport_att_false::TransportAttFalse;
 
-pub mod transport_att;
+pub mod transport_att_true;
 pub mod transport_att_false;
+pub mod transport_att;
 
 type Result<T> = std::result::Result<T, TransportsError>;
 
@@ -46,7 +48,6 @@ pub trait Transports: Debug + Send + Sync {
 #[uniffi::export]
 pub fn init_transport(
     version: u8,
-    seg_num: u8,
     sess_id: u8,
     e_id: u8,
     k_id: u8,
@@ -59,7 +60,6 @@ pub fn init_transport(
     if payload.clone().map_or(false, |p| !p.is_empty()) {
         let t_att = TransportAtt::new(
             version,
-            seg_num,
             sess_id,
             e_id,
             k_id,

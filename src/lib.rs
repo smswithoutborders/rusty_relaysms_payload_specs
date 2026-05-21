@@ -20,6 +20,8 @@ mod tests {
 pub mod contents;
 pub mod bit_utils;
 pub mod transports;
+pub mod utils;
+
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
 }

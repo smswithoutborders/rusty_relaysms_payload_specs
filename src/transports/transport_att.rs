@@ -1,19 +1,15 @@
 use std::sync::Arc;
-use crate::bit_utils;
-use crate::contents::Contents;
-use crate::contents::email::{deserialize_email, init_email};
 use crate::transports::{Transports, TransportsError};
-use crate::transports::TransportsError::{CategoryIdTooLarge, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, SegmentLessThanOne, SessionIdTooLarge, VersionTooLarge};
+use crate::transports::transport_att_true::{TransportAttTrue, TransportAttTrueN};
+use crate::transports::TransportsError::{CategoryIdTooLarge, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, SessionIdTooLarge, VersionTooLarge};
+use crate::utils;
 
-const MAX_SPLIT: u8 = 130;
+const MAX_SPLIT_0: u8 = 134;
+const MAX_SPLIT_N: u8 = 136;
 
 #[derive(Debug, uniffi::Object)]
 pub struct TransportAtt {
-    i_did: bool,
-    i_att: bool,
-    i_end: bool,
     version: u8,
-    seg_num: u8,
     sess_id: u8,
     k_id: u8,
     e_id: u8,
@@ -23,25 +19,13 @@ pub struct TransportAtt {
     payload: Option<Vec<u8>>,
 }
 
+
 #[uniffi::export]
 impl TransportAtt {
-    pub fn get_i_did(&self) -> bool { self.i_did }
-    pub fn get_i_att(&self) -> bool { self.i_att }
-    pub fn get_i_cont(&self) -> bool { self.i_end }
-    pub fn get_version(&self) -> u8 { self.version }
-    pub fn get_seg_num(&self) -> u8 { self.seg_num }
-    pub fn get_sess_id(&self) -> u8 { self.sess_id }
-    pub fn get_e_id(&self) -> u8 { self.e_id }
-    pub fn get_k_id(&self) -> u8 { self.k_id }
-    pub fn get_cat_id(&self) -> u8 { self.cat_id }
-    pub fn get_len_att(&self) -> u16 { self.len_att }
-    pub fn get_device_id(&self) -> Option<Vec<u8>> { self.device_id.clone() }
-    pub fn get_payload_content(&self) -> Option<Vec<u8>> { self.payload.clone() }
 
     #[uniffi::constructor]
     pub fn new(
         version: u8,
-        seg_num: u8,
         sess_id: u8,
         e_id: u8,
         k_id: u8,
@@ -70,15 +54,9 @@ impl TransportAtt {
         if i_did && (device_id.clone().unwrap().len() > u16::MAX as usize) {
             return Err(DeviceIdTooLarge);
         }
-        let i_att = payload.as_ref().map_or(false, |v| !v.is_empty());
-        let i_end = false; //change value after parsing
 
         Ok(Arc::new(Self {
-            i_did,
-            i_att,
-            i_end,
             version,
-            seg_num,
             sess_id,
             e_id,
             k_id,
@@ -93,25 +71,48 @@ impl TransportAtt {
     Assumption, payload already processed just needs splitting for transmission
     **/
     pub fn split(&self) -> crate::transports::Result<Vec<Arc<dyn Transports>>> {
-        todo!()
-    }
+        let mut splits: Vec<Arc<dyn Transports>> = Vec::new();
+        if !self.payload.is_some() {
+            return Err(TransportsError::EmptyPayload)
+        }
 
-}
+        let payload = self.payload.as_ref().unwrap();
+        let mut seg_num :u8 = 0;
 
-impl PartialEq for TransportAtt {
-    fn eq(&self, other: &Self) -> bool {
-        self.i_did == other.i_did
-        && self.i_att == other.i_att
-        && self.i_end == other.i_end
-        && self.version == other.version
-        && self.seg_num == other.seg_num
-        && self.sess_id == other.sess_id
-        && self.e_id == other.e_id
-        && self.k_id == other.k_id
-        && self.cat_id == other.cat_id
-        && self.len_att == other.len_att
-        && self.device_id == other.device_id
-        && self.payload == other.payload
+        let items = utils::take_n_from(payload, 0, MAX_SPLIT_0 as usize);
+        let mut start_index: usize = items.len();
+        let transport = match TransportAttTrue::new(
+            self.version,
+            seg_num,
+            self.sess_id,
+            self.k_id,
+            self.e_id,
+            self.cat_id,
+            payload.len() as u16,
+            self.device_id.clone(),
+            Option::from(items),
+        ) {
+            Ok(transport) => transport,
+            Err(e) => { return Err(TransportsError::from(e)); }
+        };
+        splits.push(transport);
+
+        while start_index < payload.len() {
+            let items = utils::take_n_from(payload, start_index, MAX_SPLIT_N as usize);
+            start_index = items.len();
+            let transport = match TransportAttTrueN::new(
+                seg_num,
+                self.sess_id,
+                Option::from(items)
+            ) {
+                Ok(transport) => transport,
+                Err(e) => { return Err(TransportsError::from(e)); }
+            };
+            splits.push(transport);
+            seg_num += 1;
+        }
+
+        Ok(splits)
     }
 }
 
@@ -126,6 +127,4 @@ impl Transports for TransportAtt {
     }
 
 }
-
-
 

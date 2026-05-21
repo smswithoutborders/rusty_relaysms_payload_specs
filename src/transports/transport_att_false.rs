@@ -3,7 +3,7 @@ use crate::contents::Contents;
 use crate::transports::{Transports, TransportsError};
 use crate::transports::TransportsError::{CategoryIdTooLarge, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, SessionIdTooLarge, VersionTooLarge};
 
-#[derive(Debug, uniffi::Object)]
+#[derive(Debug)]
 pub struct TransportAttFalse {
     i_did: bool,
     version: u8,
@@ -14,7 +14,6 @@ pub struct TransportAttFalse {
     payload: Option<Arc<dyn Contents>>,
 }
 
-#[uniffi::export]
 impl TransportAttFalse {
     pub fn get_i_did(&self) -> bool { self.i_did }
     pub fn get_version(&self) -> u8 { self.version }
@@ -78,7 +77,6 @@ impl PartialEq for TransportAttFalse {
     }
 }
 
-#[uniffi::export]
 impl Transports for TransportAttFalse {
     fn serialize(&self) -> crate::transports::Result<Vec<u8>> {
         todo!()
