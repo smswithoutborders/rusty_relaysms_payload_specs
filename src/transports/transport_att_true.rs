@@ -152,17 +152,28 @@ impl Transports for TransportAttTrue {
     }
 
     fn equals(&self, other: Arc<dyn Transports>) -> bool {
-        todo!()
+        match (self.serialize(), other.serialize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
     }
 
 }
 
 impl Transports for TransportAttTrueN {
     fn serialize(&self) -> crate::transports::Result<Vec<u8>> {
-        todo!()
+        let mut payload = vec![self.sess_id, self.seg_num];
+        if !self.payload.is_some() {
+            return Err(TransportsError::EmptyPayload);
+        }
+        payload.extend_from_slice(self.payload.clone().unwrap().as_slice());
+        Ok(payload)
     }
 
     fn equals(&self, other: Arc<dyn Transports>) -> bool {
-        todo!()
+        match (self.serialize(), other.serialize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
     }
 }

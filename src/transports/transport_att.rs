@@ -123,8 +123,10 @@ impl Transports for TransportAtt {
     }
 
     fn equals(&self, other: Arc<dyn Transports>) -> bool {
-        todo!()
+        match (self.serialize(), other.serialize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
     }
-
 }
 

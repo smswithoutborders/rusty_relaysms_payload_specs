@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use crate::contents::Contents;
-use crate::contents::email::{deserialize_email, init_email, Emails};
+use crate::contents::email::{Emails};
 use crate::transports::transport_att::TransportAtt;
 use crate::transports::transport_att_true::{TransportAttTrue};
 use crate::transports::transport_att_false::TransportAttFalse;
@@ -40,6 +40,18 @@ pub enum TransportsError {
     
     #[error("Error parsing bits")]
     ErrorParsingBits,
+
+    #[error("Content deserialization error")]
+    ContentDeserializationError,
+    
+    #[error("Content serialization error")]
+    ContentSerializationError,
+
+    #[error("Missing device ID")]
+    MissingDeviceID,
+
+    #[error("Missing payload")]
+    MissingPayload,
 }
 
 #[uniffi::export(with_foreign)]
