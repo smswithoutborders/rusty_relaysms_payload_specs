@@ -90,7 +90,7 @@ impl TransportAtt {
             self.cat_id,
             payload.len() as u16,
             self.device_id.clone(),
-            Option::from(items),
+            items,
         ) {
             Ok(transport) => transport,
             Err(e) => { return Err(TransportsError::from(e)); }
@@ -103,7 +103,7 @@ impl TransportAtt {
             let transport = match TransportAttTrueN::new(
                 seg_num,
                 self.sess_id,
-                Option::from(items)
+                items,
             ) {
                 Ok(transport) => transport,
                 Err(e) => { return Err(TransportsError::from(e)); }
