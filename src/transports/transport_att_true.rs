@@ -133,6 +133,14 @@ impl TransportAttTrue {
 }
 
 impl TransportAttTrueN {
+    pub fn init() -> Result<Arc<Self>, TransportsError> {
+        Ok(Arc::new(Self {
+            seg_num: 255,
+            sess_id: 255,
+            payload: Vec::new(),
+        }))
+    }
+
     pub fn new(
         seg_num: u8,
         sess_id: u8,
@@ -147,30 +155,17 @@ impl TransportAttTrueN {
             payload,
         }))
     }
-}
 
-impl PartialEq for TransportAttTrue {
-    fn eq(&self, other: &Self) -> bool {
-        self.i_did == other.i_did
-            && self.i_att == other.i_att
-            && self.i_end == other.i_end
-            && self.version == other.version
-            && self.seg_num == other.seg_num
-            && self.sess_id == other.sess_id
-            && self.e_id == other.e_id
-            && self.k_id == other.k_id
-            && self.cat_id == other.cat_id
-            && self.len_att == other.len_att
-            && self.device_id == other.device_id
-            && self.payload == other.payload
-    }
-}
+    pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, TransportsError> {
+        let seg_num = data[0];
+        let sess_id = data[1];
+        let payload = data[2..].to_vec();
 
-impl PartialEq for TransportAttTrueN {
-    fn eq(&self, other: &Self) -> bool {
-        self.seg_num == other.seg_num
-        && self.sess_id == other.sess_id
-        && self.payload == other.payload
+        Ok(Arc::new(Self {
+            seg_num,
+            sess_id,
+            payload
+        }))
     }
 }
 
@@ -229,8 +224,35 @@ impl Transports for TransportAttTrueN {
     }
 }
 
+
+impl PartialEq for TransportAttTrue {
+    fn eq(&self, other: &Self) -> bool {
+        self.i_did == other.i_did
+            && self.i_att == other.i_att
+            && self.i_end == other.i_end
+            && self.version == other.version
+            && self.seg_num == other.seg_num
+            && self.sess_id == other.sess_id
+            && self.e_id == other.e_id
+            && self.k_id == other.k_id
+            && self.cat_id == other.cat_id
+            && self.len_att == other.len_att
+            && self.device_id == other.device_id
+            && self.payload == other.payload
+    }
+}
+
+impl PartialEq for TransportAttTrueN {
+    fn eq(&self, other: &Self) -> bool {
+        self.seg_num == other.seg_num
+            && self.sess_id == other.sess_id
+            && self.payload == other.payload
+    }
+}
+
+
 #[test]
-fn att_true_serialize() {
+fn att_true_n_serialize() {
     let to  = "example@gmail.com"; //2
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
@@ -264,11 +286,22 @@ fn att_true_serialize() {
         cat_id,
         len_att,
         device_id,
-        payload,
+        payload.clone(),
     ).unwrap();
 
     let serialized = transport_att_false.serialize().unwrap();
     let deserialized = TransportAttTrue::init().unwrap()
         .deserialize(&serialized).unwrap();
     assert_eq!(transport_att_false, deserialized);
+
+    let transport_att_n_false = TransportAttTrueN::new(
+        seg_num,
+        sess_num,
+        payload,
+    ).unwrap();
+
+    let serialized = transport_att_n_false.serialize().unwrap();
+    let deserialized = TransportAttTrueN::init().unwrap()
+        .deserialize(&serialized).unwrap();
+    assert_eq!(transport_att_n_false, deserialized);
 }
