@@ -52,6 +52,23 @@ impl PayloadWithAttachments {
     pub fn get_device_id(&self) -> Option<Vec<u8>> { self.device_id.clone() }
     pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
+    pub fn calculate_segments(
+        &self,
+        is_did: bool,
+    ) -> u32 {
+        let payload_len = self.payload.len() as u32;
+        let seg0_header_size = if is_did { SEG_0_HEADER_SIZE_WITH_DID }
+        else { SEG_0_HEADER_SIZE_WITHOUT_DID} as u32;
+        let max_value = if is_did { MAX_SPLIT_0_WITH_DID + SEG_0_HEADER_SIZE_WITH_DID }
+        else { MAX_SPLIT_0_WITHOUT_DID + SEG_0_HEADER_SIZE_WITHOUT_DID } as u32;
+        // (x + seg0_header_size + (SEG_N_HEADER_SIZE as u32 * (x.div_ceil(max_value) - 1)));
+        (payload_len + seg0_header_size +
+            (SEG_N_HEADER_SIZE as u32 * (payload_len.div_ceil(max_value) - 1)))
+            .div_ceil(max_value)
+        // 1 + 22 + (2 * (1 - 1))
+    }
+
+
 
     #[uniffi::constructor]
     pub fn instance() -> Result<Arc<Self>, PayloadsError> {
@@ -458,33 +475,30 @@ fn att_true_n_serialize() {
     assert_eq!(payload_with_n_attachment, deserialized);
 }
 
-fn calculate_segments(
-    x: u32,
-    is_did: bool,
-) -> u32 {
-    let seg0_header_size = if is_did { SEG_0_HEADER_SIZE_WITH_DID }
-    else { SEG_0_HEADER_SIZE_WITHOUT_DID} as u32;
-    let max_value = if is_did { MAX_SPLIT_0_WITH_DID + SEG_0_HEADER_SIZE_WITH_DID }
-    else { MAX_SPLIT_0_WITHOUT_DID + SEG_0_HEADER_SIZE_WITHOUT_DID } as u32;
-    // (x + seg0_header_size + (SEG_N_HEADER_SIZE as u32 * (x.div_ceil(max_value) - 1)));
-    (x + seg0_header_size + (SEG_N_HEADER_SIZE as u32 * (x.div_ceil(max_value) - 1)))
-        .div_ceil(max_value)
-    // 1 + 22 + (2 * (1 - 1))
-}
 
 #[test]
 fn test_calculate_segments() {
-    let expected = 1;
-    assert_eq!(expected, calculate_segments(1, true));
+    let mut ins = PayloadWithAttachments::instance().unwrap();
+    if let Some(val) = Arc::get_mut(&mut ins) {
+        val.payload = rand::random::<[u8; 1]>().to_vec();
 
-    let expected = 3;
-    assert_eq!(expected, calculate_segments(300, true));
+        let expected = 1;
+        assert_eq!(expected, val.calculate_segments(true));
 
-    let expected = 1;
-    assert_eq!(expected, calculate_segments(1, false));
+        val.payload = rand::random::<[u8; 300]>().to_vec();
+        let expected = 3;
+        assert_eq!(expected, val.calculate_segments(true));
 
-    let expected = 3;
-    assert_eq!(expected, calculate_segments(300, false));
+        val.payload = rand::random::<[u8; 1]>().to_vec();
+        let expected = 1;
+        assert_eq!(expected, val.calculate_segments(false));
+
+        val.payload = rand::random::<[u8; 300]>().to_vec();
+        let expected = 3;
+        assert_eq!(expected, val.calculate_segments(false));
+    }
+
+
 }
 
 #[test]
@@ -525,7 +539,7 @@ fn att_split() {
     ).unwrap();
 
     let split = payload_with_attachment.split().unwrap();
-    let expected = calculate_segments(LEN_ATT as u32, true);
+    let expected = payload_with_attachment.calculate_segments(true);
     assert_eq!(expected, split.len() as u32);
     let mut serialized = split[0].serialize().unwrap();
     assert_eq!(138, serialized.len());
