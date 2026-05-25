@@ -34,7 +34,7 @@ pub fn deserialize_for_content(cat_id: u8, payload: Vec<u8>) -> Result<Arc<dyn C
     match cat_id {
         0 => {
             // email
-            Ok(Emails::init()?.deserialize(payload)?)
+            Ok(Emails::instance()?.deserialize(payload)?)
         }
         1 => {
             todo!()

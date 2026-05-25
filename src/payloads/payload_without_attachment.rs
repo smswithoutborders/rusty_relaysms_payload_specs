@@ -1,12 +1,14 @@
 use std::sync::Arc;
-use crate::bit_utils;
+use crate::{bit_utils, utils};
 use crate::contents::{deserialize_for_content, Contents};
 use crate::contents::email::Emails;
-use crate::transports::{Transports, TransportsError};
-use crate::transports::TransportsError::{CategoryIdTooLarge, ContentDeserializationError, ContentSerializationError, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, MissingDeviceID, MissingPayload, SessionIdTooLarge, VersionTooLarge};
+use crate::payloads::{Payloads, PayloadsError};
+use crate::payloads::payload_with_attachments::{PayloadWithAttachments, PayloadWithAttachmentsNoHeader};
+use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, ContentSerializationError, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, MissingDeviceID, MissingPayload, SessionIdTooLarge, VersionTooLarge};
 
-#[derive(Debug)]
-pub struct TransportAttFalse {
+
+#[derive(Debug, uniffi::Object)]
+pub struct PayloadWithoutAttachment {
     i_did: bool,
     i_att: bool,
     i_end: bool,
@@ -18,7 +20,9 @@ pub struct TransportAttFalse {
     payload: Option<Arc<dyn Contents>>,
 }
 
-impl TransportAttFalse {
+
+#[uniffi::export]
+impl PayloadWithoutAttachment {
     pub fn get_i_did(&self) -> bool { self.i_did }
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_e_id(&self) -> u8 { self.e_id }
@@ -29,7 +33,7 @@ impl TransportAttFalse {
 
 
     #[uniffi::constructor]
-    pub fn init() -> Result<Arc<Self>, TransportsError> {
+    pub fn instance() -> Result<Arc<Self>, PayloadsError> {
         Ok(Arc::new(Self {
             i_did: false,
             i_att: false,
@@ -51,7 +55,7 @@ impl TransportAttFalse {
         cat_id: u8,
         device_id: Option<Vec<u8>>,
         payload: Option<Arc<dyn Contents>>,
-    ) -> Result<Arc<Self>, TransportsError> {
+    ) -> Result<Arc<Self>, PayloadsError> {
         if version > (2u8.pow(4) - 1) {
             return Err(VersionTooLarge);
         }
@@ -83,7 +87,7 @@ impl TransportAttFalse {
         }))
     }
 
-    pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, TransportsError> {
+    pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, PayloadsError> {
         let i_did = bit_utils::is_bit_on(&data[0], 0);
         let i_att = bit_utils::is_bit_on(&data[0], 1);
         let i_end = bit_utils::is_bit_on(&data[0], 2);
@@ -113,9 +117,11 @@ impl TransportAttFalse {
             payload
         }))
     }
+
 }
 
-impl PartialEq for TransportAttFalse {
+
+impl PartialEq for PayloadWithoutAttachment {
     fn eq(&self, other: &Self) -> bool {
         self.i_did == other.i_did
             && self.version == other.version
@@ -129,8 +135,10 @@ impl PartialEq for TransportAttFalse {
     }
 }
 
-impl Transports for TransportAttFalse {
-    fn serialize(&self) -> crate::transports::Result<Vec<u8>> {
+
+#[uniffi::export]
+impl Payloads for PayloadWithoutAttachment {
+    fn serialize(&self) -> crate::payloads::Result<Vec<u8>> {
         if !self.payload.is_some() {
             return Err(MissingPayload)
         }
@@ -165,7 +173,7 @@ impl Transports for TransportAttFalse {
         Ok(bytes)
     }
 
-    fn equals(&self, other: Arc<dyn Transports>) -> bool {
+    fn equals(&self, other: Arc<dyn Payloads>) -> bool {
         match (self.serialize(), other.serialize()) {
             (Ok(a), Ok(b)) => a == b,
             _ => false,
@@ -193,7 +201,7 @@ fn att_false_serialize() {
     let device_id: Option<Vec<u8>> = Some(rand::random::<[u8; 16]>().to_vec());
     let payload: Option<Arc<dyn Contents>> = Some(email);
 
-    let transport_att_false = TransportAttFalse::new(
+    let transport_att_false = PayloadWithoutAttachment::new(
         version,
         e_id,
         k_id,
@@ -203,7 +211,7 @@ fn att_false_serialize() {
     ).unwrap();
 
     let serialized = transport_att_false.serialize().unwrap();
-    let deserialized = TransportAttFalse::init().unwrap()
+    let deserialized = PayloadWithoutAttachment::instance().unwrap()
         .deserialize(&serialized).unwrap();
     assert_eq!(transport_att_false, deserialized);
 }

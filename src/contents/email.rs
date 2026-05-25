@@ -26,7 +26,7 @@ impl Emails {
     pub fn get_subject(&self) -> Option<String> { self.subject.clone() }
 
     #[uniffi::constructor]
-    pub fn init() -> Result<Arc<Self>> {
+    pub fn instance() -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             len_to: 0,
             len_subject: 0,
@@ -144,7 +144,7 @@ fn test_email_init() {
     ).unwrap();
 
     let serialized = email.serialize().unwrap();
-    let deserialized = Emails::init().unwrap().deserialize(serialized).unwrap();
+    let deserialized = Emails::instance().unwrap().deserialize(serialized).unwrap();
 
     assert_eq!(email, deserialized);
     // assert_eq!((2 + to.len() + body.len() + subject.len()), serialized.len());
