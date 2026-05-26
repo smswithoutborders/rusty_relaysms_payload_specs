@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use crate::{bit_utils, utils};
-use crate::contents::{deserialize_for_content, Contents};
+use crate::contents::{deserialize_for_content, ContentCategories, Contents};
+use crate::contents::contents_container::ContentsContainer;
 use crate::contents::email::Emails;
 use crate::payloads::{Payloads, PayloadsError};
 use crate::payloads::payload_without_attachment::PayloadWithoutAttachment;
@@ -228,7 +229,7 @@ impl PayloadWithAttachments {
 
         let mut seg_num :u8 = 0;
 
-        let mut max_value = if self.i_did { MAX_SPLIT_0_WITH_DID } else { MAX_SPLIT_0_WITHOUT_DID };
+        let max_value = if self.i_did { MAX_SPLIT_0_WITH_DID } else { MAX_SPLIT_0_WITHOUT_DID };
         let items = utils::take_n_from(&self.payload, 0, max_value as usize);
         let mut start_index: usize = items.len();
         let transport = match PayloadWithAttachments::new_segment(
@@ -507,11 +508,18 @@ fn att_split() {
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
     let from_id: u8 = 7; // 1
-    let email = Emails::new(
-        to,
-        body,
-        Option::from(subject.to_string()),
-        &from_id
+    // let email = Emails::new(
+    //     to,
+    //     body,
+    //     Option::from(subject.to_string()),
+    //     &from_id
+    // ).unwrap();
+    let email = ContentsContainer::new(
+        ContentCategories::Email,
+        body.to_string(),
+        from_id,
+        Some(to.to_string()),
+        Some(subject.to_string())
     ).unwrap();
 
     let version: u8 = 1;
