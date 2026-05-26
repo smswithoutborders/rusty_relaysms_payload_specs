@@ -508,19 +508,15 @@ fn att_split() {
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
     let from_id: u8 = 7; // 1
-    // let email = Emails::new(
-    //     to,
-    //     body,
-    //     Option::from(subject.to_string()),
-    //     &from_id
-    // ).unwrap();
-    let email = ContentsContainer::new(
+
+    let container = ContentsContainer::new(
         ContentCategories::Email,
         body.to_string(),
         from_id,
         Some(to.to_string()),
         Some(subject.to_string())
-    ).unwrap();
+    );
+    let email = container.instance().unwrap();
 
     let version: u8 = 1;
     let seg_num: u8 = 1;

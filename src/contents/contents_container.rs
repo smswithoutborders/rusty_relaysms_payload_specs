@@ -1,10 +1,16 @@
 use std::option;
 use std::sync::Arc;
-use crate::contents::{ContentCategories, ContentError, Contents};
+use crate::contents::{content_category_from_u8, ContentCategories, ContentError, Contents};
 use crate::contents::email::Emails;
 
 #[derive(PartialEq, Debug, uniffi::Object)]
-pub struct ContentsContainer;
+pub struct ContentsContainer {
+    cat_id: u8,
+    body: String,
+    from_id: u8,
+    to: Option<String>,
+    subject: Option<String>,
+}
 
 #[uniffi::export]
 impl ContentsContainer {
@@ -15,20 +21,30 @@ impl ContentsContainer {
         from_id: u8,
         to: Option<String>,
         subject: Option<String>,
-    ) -> Result<Arc<dyn Contents>, ContentError> {
-        match cat_id {
+    ) -> Self {
+        Self {
+            cat_id: cat_id.raw_values(),
+            body,
+            from_id,
+            to,
+            subject
+        }
+    }
+
+    pub fn instance(&self) -> Result<Arc<dyn Contents>, ContentError> {
+        match content_category_from_u8(self.cat_id) {
             ContentCategories::Email => {
-                if !to.is_some() {
+                if !self.to.is_some() {
                     return Err(ContentError::MissingTo)
                 }
-                if body.is_empty() {
+                if self.body.is_empty() {
                     return Err(ContentError::EmptyBody)
                 }
                 let email = match Emails::new(
-                    to.unwrap().as_str(),
-                    body.as_str(),
-                    subject,
-                    &from_id
+                    self.to.as_ref().unwrap().as_str(),
+                    self.body.as_str(),
+                    self.subject.clone(),
+                    &self.from_id
                 ) {
                     Ok(email) => email,
                     Err(e) => return Err(ContentError::from(e))
@@ -46,6 +62,7 @@ impl ContentsContainer {
             }
         }
     }
+
 }
 
 

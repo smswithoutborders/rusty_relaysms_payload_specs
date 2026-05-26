@@ -2,6 +2,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 use crate::AsAny;
+use crate::contents::contents_container::ContentsContainer;
 use crate::contents::email::Emails;
 
 pub mod email;
@@ -15,6 +16,19 @@ pub enum ContentCategories {
     Text = 0x2,
     Bridge = 0x3,
 }
+
+#[uniffi::export]
+pub fn content_category_from_u8(value: u8) -> ContentCategories {
+    // TODO: put a guard here to make sure in range
+    match value {
+        0x0 => ContentCategories::Email,
+        0x1 => ContentCategories::Message,
+        0x2 => ContentCategories::Text,
+        0x3 => ContentCategories::Bridge,
+        _ => ContentCategories::Email,
+    }
+}
+
 
 #[uniffi::export]
 impl ContentCategories {

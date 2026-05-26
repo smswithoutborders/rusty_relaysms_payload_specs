@@ -1,5 +1,8 @@
 use std::any::Any;
 
+
+pub const VERSION: u8 = 0x01;
+
 #[uniffi::export]
 pub fn add_rust(left: u64, right: u64) -> u64 {
     left + right
@@ -15,6 +18,11 @@ mod tests {
         let result = add_rust(2, 2);
         assert_eq!(result, 4);
     }
+}
+
+#[uniffi::export]
+pub fn get_version() -> u8 {
+    VERSION
 }
 
 pub mod contents;
