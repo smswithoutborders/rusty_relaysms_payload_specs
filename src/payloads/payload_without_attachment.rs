@@ -9,40 +9,32 @@ use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationE
 
 #[derive(Debug, uniffi::Object)]
 pub struct PayloadWithoutAttachment {
-    i_did: bool,
     i_att: bool,
-    i_end: bool,
     version: u8,
     k_id: u8,
     e_id: u8,
     cat_id: u8,
-    device_id: Option<Vec<u8>>,
     payload: Option<Arc<dyn Contents>>,
 }
 
 
 #[uniffi::export]
 impl PayloadWithoutAttachment {
-    pub fn get_i_did(&self) -> bool { self.i_did }
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_e_id(&self) -> u8 { self.e_id }
     pub fn get_k_id(&self) -> u8 { self.k_id }
     pub fn get_cat_id(&self) -> u8 { self.cat_id }
-    pub fn get_device_id(&self) -> Option<Vec<u8>> { self.device_id.clone() }
     pub fn get_payload_content(&self) -> Option<Arc<dyn Contents>> { self.payload.clone() }
 
 
     #[uniffi::constructor]
     pub fn instance() -> Result<Arc<Self>, PayloadsError> {
         Ok(Arc::new(Self {
-            i_did: false,
             i_att: false,
-            i_end: false,
             version: 255,
             k_id: 255,
             e_id: 255,
             cat_id: 255,
-            device_id: None,
             payload: None,
         }))
     }
@@ -53,7 +45,6 @@ impl PayloadWithoutAttachment {
         e_id: u8,
         k_id: u8,
         cat_id: u8,
-        device_id: Option<Vec<u8>>,
         payload: Option<Arc<dyn Contents>>,
     ) -> Result<Arc<Self>, PayloadsError> {
         if version > (2u8.pow(4) - 1) {
@@ -69,51 +60,36 @@ impl PayloadWithoutAttachment {
             return Err(CategoryIdTooLarge);
         }
 
-        let i_did = device_id.as_ref().map_or(false, |v| !v.is_empty());
-        if i_did && (device_id.clone().unwrap().len() > u16::MAX as usize) {
-            return Err(DeviceIdTooLarge);
-        }
-
         Ok(Arc::new(Self {
-            i_did,
             i_att: false,
-            i_end: false,
             version,
             e_id,
             k_id,
             cat_id,
-            device_id,
             payload,
         }))
     }
 
     pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, PayloadsError> {
-        let i_did = bit_utils::is_bit_on(&data[0], 0);
-        let i_att = bit_utils::is_bit_on(&data[0], 1);
-        let i_end = bit_utils::is_bit_on(&data[0], 2);
-        let version = bit_utils::get_bits(&data[0], 3, 7);
+        let version = bit_utils::get_bits(&data[0], 0, 6);
+        let i_att = bit_utils::is_bit_on(&data[0], 7);
         let k_id = data[1];
         let e_id = bit_utils::get_bits(&data[2], 0, 3);
         let cat_id = bit_utils::get_bits(&data[2], 4, 7);
-        let device_id = Option::from(data[3..(3 + 16)].to_vec());
-
         let payload = match deserialize_for_content(
             cat_id,
-            data[(3 + 16)..].to_vec()
+            data[3..].to_vec()
         ) {
             Ok(payload) => Some(payload),
             Err(e) => return Err(ContentDeserializationError) // TODO: put in the error
         };
 
         Ok(Arc::new( Self {
-            i_did,
             i_att,
-            i_end,
             version,
             k_id,
             e_id,
             cat_id,
-            device_id,
             payload
         }))
     }
@@ -123,12 +99,10 @@ impl PayloadWithoutAttachment {
 
 impl PartialEq for PayloadWithoutAttachment {
     fn eq(&self, other: &Self) -> bool {
-        self.i_did == other.i_did
-            && self.version == other.version
+        self.version == other.version
             && self.e_id == other.e_id
             && self.k_id == other.k_id
             && self.cat_id == other.cat_id
-            && self.device_id == other.device_id
             && self.payload.as_ref()
             .zip(self.payload.as_ref())
             .map_or(false, |(a, b)| Arc::ptr_eq(a, b))
@@ -145,26 +119,15 @@ impl Payloads for PayloadWithoutAttachment {
 
         let mut bytes: Vec<u8> = Vec::new();
 
-        let mut byte1 : u8 = if self.i_did { 1 } else { 0 };
-        if self.i_att { bit_utils::turn_bit_on(&byte1, 1); }
-        if self.i_end { byte1 = bit_utils::turn_bit_on(&byte1, 2); }
-        byte1 = bit_utils::put_value(&byte1, 3, self.version, 4);
+        let byte1 : u8 = bit_utils::put_value(&0, 0, self.version, 1);
+        if self.i_att { bit_utils::turn_bit_on(&byte1, 7); }
         bytes.push(byte1);
+
         bytes.push(self.k_id);
-        let byte2 = bit_utils::put_value(
-            &self.e_id,
-            0,
-            self.cat_id,
-            4
-        );
+
+        let byte2 = bit_utils::put_value(&self.e_id, 4, self.cat_id, 4);
         bytes.push(byte2);
 
-        if self.i_did {
-            if !self.device_id.is_some() {
-                return Err(MissingDeviceID)
-            }
-            bytes.extend_from_slice(self.device_id.as_ref().unwrap());
-        }
         let payload = match self.payload.as_ref().unwrap().serialize() {
             Ok(payload) => payload,
             Err(e) => return Err(ContentSerializationError)
@@ -195,10 +158,9 @@ fn att_false_serialize() {
     ).unwrap();
 
     let version: u8 = 1;
-    let e_id: u8 = 1;
-    let k_id: u8 = 1;
+    let e_id: u8 = 5;
+    let k_id: u8 = 7;
     let cat_id: u8 = email.get_cat_id();
-    let device_id: Option<Vec<u8>> = Some(rand::random::<[u8; 16]>().to_vec());
     let payload: Option<Arc<dyn Contents>> = Some(email);
 
     let transport_att_false = PayloadWithoutAttachment::new(
@@ -206,7 +168,6 @@ fn att_false_serialize() {
         e_id,
         k_id,
         cat_id,
-        device_id,
         payload,
     ).unwrap();
 

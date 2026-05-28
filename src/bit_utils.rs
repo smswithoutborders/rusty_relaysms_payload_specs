@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum BitParsingError {
     IndexOutOfBounds,
     ExpectedLargerThanOctet,
@@ -89,7 +89,7 @@ fn test_get_bits() {
 }
 
 pub fn turn_bit_on(data: &u8, index: u8) -> u8 {
-    data | ((1 << index + 1) - 1)
+    data | (1 << index)
 }
 
 #[test]

@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::sync::Arc;
-use crate::contents::Contents;
+use crate::bit_utils;
+use crate::bit_utils::BitParsingError;
+use crate::contents::{ContentError, Contents};
 use crate::contents::email::{Emails};
 use crate::payloads::payload_with_attachments::{PayloadWithAttachments};
 use crate::payloads::payload_without_attachment::PayloadWithoutAttachment;
@@ -35,8 +37,10 @@ pub enum PayloadsError {
     #[error("Empty payload")]
     EmptyPayload,
     
-    #[error("Error parsing bits")]
-    ErrorParsingBits,
+    #[error("Error parsing bits - {error}")]
+    ErrorParsingBits {
+        error: BitParsingError,
+    },
 
     #[error("Content deserialization error")]
     ContentDeserializationError,
@@ -56,20 +60,14 @@ pub enum PayloadsError {
         max: u8,
     },
 
-    #[error("Header without device ID too large; wanted {max} got {current}")]
-    HeaderWithoutDeviceIdTooLarge {
+    #[error("Header too large; wanted {max} got {current}")]
+    HeaderTooLarge {
         current: i32,
         max: u8,
     },
 
-    #[error("Header with device ID too large; wanted {max} got {current}")]
-    HeaderWithDeviceIdTooLarge {
-        current: i32,
-        max: u8,
-    },
-
-    #[error("Header {segment} with device ID too large; wanted {max} got {current}")]
-    HeaderNWithDeviceIdTooLarge {
+    #[error("N Header for seg: {segment} too large; wanted {max} got {current}")]
+    NHeaderTooLarge {
         segment: u8,
         current: i32,
         max: u8,
