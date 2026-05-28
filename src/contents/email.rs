@@ -7,7 +7,7 @@ type Result<T> = std::result::Result<T, ContentError>;
 
 #[derive(PartialEq, Debug, uniffi::Object)]
 pub struct Emails {
-    from_id: u8,
+    i_sub: bool,
     len_subject: u8,
     len_to: u8,
     to: String,
@@ -18,24 +18,12 @@ pub struct Emails {
 
 #[uniffi::export]
 impl Emails {
-    pub fn get_from_id(&self) -> u8 { self.from_id }
+    pub fn get_i_sub(&self) -> bool { self.i_sub }
     pub fn get_len_subject(&self) -> u8 { self.len_subject }
     pub fn get_len_to(&self) -> u8 { self.len_to }
     pub fn get_to(&self) -> String { self.to.clone() }
     pub fn get_body(&self) -> String { self.body.clone() }
     pub fn get_subject(&self) -> Option<String> { self.subject.clone() }
-
-    #[uniffi::constructor]
-    pub fn instance() -> Result<Arc<Self>> {
-        Ok(Arc::new(Self {
-            len_to: 0,
-            len_subject: 0,
-            from_id: 0,
-            to: "".to_string(),
-            body: "".to_string(),
-            subject: None,
-        }))
-    }
 
     #[uniffi::constructor]
     pub fn new(
@@ -48,54 +36,59 @@ impl Emails {
             return Err(ContentError::FromIdTooLarge);
         }
 
-        let len_subject = subject.as_ref().map(|s| s.chars().count()).unwrap_or(0);
-        if len_subject > (2u8.pow(5) - 1) as usize {
+        let len_subject = subject
+            .as_ref()
+            .map(|s| s.chars().count())
+            .unwrap_or(0);
+
+        if len_subject > (2u8.pow(7) - 1) as usize {
             return Err(ContentError::SubjectLenTooLarge);
         }
 
-        if to.len() > u8::MAX as usize {
+        if to.len() > (2u8.pow(7) - 1) as usize {
             return Err(ContentError::ToTooLarge);
         }
 
         Ok(Arc::new(Self {
+            i_sub: subject.is_some() && !subject.as_ref().unwrap().is_empty(),
             len_to: to.len() as u8,
             len_subject: len_subject as u8,
-            from_id: *from_id,
             to: to.to_string(),
             body: body.to_string(),
             subject: subject.map(|s| s.to_string()),
         }))
     }
 
-    pub fn deserialize(&self, data: Vec<u8>) -> std::result::Result<Arc<Self>, ContentError> {
-        let from_id = bit_utils::get_bits(&data[0], 0, 2);
-        let len_subject = bit_utils::get_bits(&data[0], 3, 7);
-        let len_to = data[1];
+}
 
-        let mut current_index: usize = 2;
-        let to = data[2..current_index + len_to as usize].to_vec();
-        current_index += len_to as usize;
+pub fn deserialize_email_content(data: Vec<u8>) -> std::result::Result<Arc<Emails>, ContentError> {
+    let i_sub = bit_utils::is_bit_on(&data[0], 0);
+    let len_subject = bit_utils::get_bits(&data[0], 1, 7);
+    let len_to = bit_utils::get_bits(&data[1], 0, 6);
 
-        let subject = if len_subject > 0 {
-            let slice = data[current_index..current_index + len_subject as usize].to_vec();
-            current_index += len_subject as usize;
-            match String::from_utf8(slice) {
-                Ok(s) => Some(s),
-                Err(_) => None
-            }
-        } else { None };
+    let mut current_index: usize = 2;
+    let to = data[2..current_index + len_to as usize].to_vec();
+    current_index += len_to as usize;
 
-        let body = data[current_index..].to_vec();
+    let subject = if i_sub {
+        let slice = data[current_index..current_index + len_subject as usize].to_vec();
+        current_index += len_subject as usize;
+        match String::from_utf8(slice) {
+            Ok(s) => Some(s),
+            Err(_) => None
+        }
+    } else { None };
 
-        Ok(Arc::new(Self {
-            from_id,
-            len_subject,
-            len_to,
-            to: String::from_utf8(to).unwrap(),
-            body: String::from_utf8(body).unwrap(),
-            subject
-        }))
-    }
+    let body = data[current_index..].to_vec();
+
+    Ok(Arc::new(Emails {
+        i_sub,
+        len_subject,
+        len_to,
+        to: String::from_utf8(to).unwrap(),
+        body: String::from_utf8(body).unwrap(),
+        subject
+    }))
 }
 
 #[uniffi::export]
@@ -103,10 +96,15 @@ impl Contents for Emails {
     fn serialize(&self) -> std::result::Result<Vec<u8>, ContentError> {
         let mut bytes: Vec<u8> = Vec::new(); // TODO: put size here
 
-        let index_0 = bit_utils::put_value(
-            &self.from_id, 3, self.len_subject, 2);
-        bytes.push(index_0);
-        bytes.push(self.len_to);
+        let mut byte: u8 = if self.i_sub { 1 } else { 0 };
+        if self.i_sub {
+            byte = bit_utils::put_value(&byte, 1, self.len_subject, 1);
+            bytes.push(byte);
+            bytes.push(self.len_to);
+        } else {
+            byte = bit_utils::put_value(&byte, 1, self.len_to, 1);
+            bytes.push(byte);
+        }
 
         bytes.extend_from_slice(self.to.as_bytes());
         let subject_bytes = self.subject.as_deref().unwrap_or("").as_bytes();
@@ -118,7 +116,6 @@ impl Contents for Emails {
     }
 
     fn get_cat_id(&self) -> u8 { 0 }
-
 
     fn equals(&self, other: Arc<dyn Contents>) -> bool {
         match (self.serialize(), other.serialize()) {
@@ -144,7 +141,7 @@ fn test_email_init() {
     ).unwrap();
 
     let serialized = email.serialize().unwrap();
-    let deserialized = Emails::instance().unwrap().deserialize(serialized).unwrap();
+    let deserialized = deserialize_email_content(serialized).unwrap();
 
     assert_eq!(email, deserialized);
     // assert_eq!((2 + to.len() + body.len() + subject.len()), serialized.len());

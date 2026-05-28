@@ -4,7 +4,7 @@ use crate::contents::{deserialize_for_content, ContentCategories, Contents};
 use crate::contents::contents_container::ContentsContainer;
 use crate::contents::email::Emails;
 use crate::payloads::{Payloads, PayloadsError};
-use crate::payloads::payload_without_attachment::PayloadWithoutAttachment;
+use crate::payloads::payload_without_attachment::PayloadWithoutAttachments;
 use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, DeviceIdTooLarge, EncryptionIdTooLarge, HeaderTooLarge, KeyIdTooLarge, NHeaderTooLarge, PayloadTooLarge, SessionIdTooLarge, VersionTooLarge};
 
 const SEG_0_HEADER_SIZE: u8 = 10;
@@ -172,6 +172,8 @@ impl PayloadWithAttachments {
 
 }
 
+
+#[uniffi::export]
 pub fn deserialize_payload_with_attachments(
     data: &[u8]
 ) -> Result<Arc<PayloadWithAttachments>, PayloadsError> {
@@ -328,6 +330,7 @@ impl PartialEq for PayloadWithAttachments {
             && self.sess_id == other.sess_id
             && self.e_id == other.e_id
             && self.k_id == other.k_id
+            && self.f_id == other.f_id
             && self.len_att == other.len_att
             && self.payload == other.payload
     }

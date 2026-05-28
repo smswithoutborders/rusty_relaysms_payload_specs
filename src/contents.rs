@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use crate::AsAny;
 use crate::contents::contents_container::ContentsContainer;
-use crate::contents::email::Emails;
+use crate::contents::email::{deserialize_email_content, Emails};
 
 pub mod email;
 pub mod contents_container;
@@ -82,7 +82,7 @@ pub fn deserialize_for_content(cat_id: u8, payload: Vec<u8>) -> Result<Arc<dyn C
     match cat_id {
         0 => {
             // email
-            Ok(Emails::instance()?.deserialize(payload)?)
+            Ok(deserialize_email_content(payload)?)
         }
         1 => {
             todo!()

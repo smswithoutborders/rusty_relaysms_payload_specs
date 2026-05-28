@@ -5,7 +5,7 @@ use crate::bit_utils::BitParsingError;
 use crate::contents::{ContentError, Contents};
 use crate::contents::email::{Emails};
 use crate::payloads::payload_with_attachments::{PayloadWithAttachments};
-use crate::payloads::payload_without_attachment::PayloadWithoutAttachment;
+use crate::payloads::payload_without_attachment::PayloadWithoutAttachments;
 
 pub mod payload_with_attachments;
 pub mod payload_without_attachment;
