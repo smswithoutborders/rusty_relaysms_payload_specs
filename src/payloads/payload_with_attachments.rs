@@ -20,7 +20,7 @@ pub struct PayloadWithAttachments {
     k_id: u8,
     e_id: u8,
     len_att: u16,
-    f_id: u32,
+    t_id: u32,
     payload: Vec<u8>,
 }
 
@@ -40,7 +40,7 @@ impl PayloadWithAttachments {
     pub fn get_sess_id(&self) -> u8 { self.sess_id }
     pub fn get_e_id(&self) -> u8 { self.e_id }
     pub fn get_k_id(&self) -> u8 { self.k_id }
-    pub fn get_f_id(&self) -> u32 { self.f_id }
+    pub fn get_t_id(&self) -> u32 { self.t_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
     pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
@@ -57,7 +57,7 @@ impl PayloadWithAttachments {
         sess_id: u8,
         e_id: u8,
         k_id: u8,
-        f_id: u32,
+        t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, PayloadsError> {
@@ -83,7 +83,7 @@ impl PayloadWithAttachments {
             sess_id,
             e_id,
             k_id,
-            f_id,
+            t_id,
             len_att,
             payload,
         }))
@@ -97,7 +97,7 @@ impl PayloadWithAttachments {
         sess_id: u8,
         k_id: u8,
         e_id: u8,
-        f_id: u32,
+        t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, PayloadsError> {
@@ -117,7 +117,7 @@ impl PayloadWithAttachments {
             sess_id,
             e_id,
             k_id,
-            f_id,
+            t_id,
             len_att,
             payload,
         }))
@@ -141,7 +141,7 @@ impl PayloadWithAttachments {
             self.sess_id,
             self.k_id,
             self.e_id,
-            self.f_id,
+            self.t_id,
             self.payload.len() as u16,
             items,
         ) {
@@ -191,7 +191,7 @@ pub fn deserialize_payload_with_attachments(
     };
     let k_id = bit_utils::get_bits(&data[2], 4, 7);
     let e_id = bit_utils::get_bits(&data[3], 0, 2);
-    let f_id = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+    let t_id = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
     let len_att = u16::from_le_bytes([data[8], data[9]]);
     let payload = data[10..].to_vec();
 
@@ -202,7 +202,7 @@ pub fn deserialize_payload_with_attachments(
         sess_id,
         k_id,
         e_id,
-        f_id,
+        t_id,
         len_att,
         payload
     }))
@@ -273,7 +273,7 @@ impl Payloads for PayloadWithAttachments {
         bytes.push(byte);
 
         bytes.push(self.e_id);
-        bytes.extend(self.f_id.to_le_bytes());
+        bytes.extend(self.t_id.to_le_bytes());
         bytes.extend(self.len_att.to_le_bytes());
 
         if bytes.len() > SEG_0_HEADER_SIZE as usize {
@@ -330,7 +330,7 @@ impl PartialEq for PayloadWithAttachments {
             && self.sess_id == other.sess_id
             && self.e_id == other.e_id
             && self.k_id == other.k_id
-            && self.f_id == other.f_id
+            && self.t_id == other.t_id
             && self.len_att == other.len_att
             && self.payload == other.payload
     }
@@ -350,12 +350,10 @@ fn att_true_n_serialize() {
     let to  = "example@gmail.com"; //2
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
-    let from_id: u8 = 7; // 1
     let email = Emails::new(
         to,
         body,
         Option::from(subject.to_string()),
-        &from_id
     ).unwrap();
 
     let version: u8 = 1;
@@ -435,8 +433,6 @@ fn test_calculate_segments() {
         let expected = 3;
         assert_eq!(expected, val.calculate_segments());
     }
-
-
 }
 
 #[test]
@@ -449,7 +445,6 @@ fn att_split() {
     let container = ContentsContainer::new(
         ContentCategories::Email,
         body.to_string(),
-        from_id,
         Some(to.to_string()),
         Some(subject.to_string())
     );

@@ -30,12 +30,7 @@ impl Emails {
         to: &str,
         body: &str,
         subject: Option<String>,
-        from_id: &u8,
     ) -> Result<Arc<Self>> {
-        if from_id > &(2u8.pow(3) - 1) {
-            return Err(ContentError::FromIdTooLarge);
-        }
-
         let len_subject = subject
             .as_ref()
             .map(|s| s.chars().count())
@@ -132,12 +127,10 @@ fn test_email_init() {
     let to  = "example@gmail.com"; //2
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
-    let from_id: u8 = 7; // 1
     let email = Emails::new(
         to,
         body,
         Option::from(subject.to_string()),
-        &from_id
     ).unwrap();
 
     let serialized = email.serialize().unwrap();

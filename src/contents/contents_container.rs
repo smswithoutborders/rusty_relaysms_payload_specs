@@ -7,7 +7,6 @@ use crate::contents::email::Emails;
 pub struct ContentsContainer {
     cat_id: u8,
     body: String,
-    from_id: u8,
     to: Option<String>,
     subject: Option<String>,
 }
@@ -18,14 +17,12 @@ impl ContentsContainer {
     pub fn new(
         cat_id: ContentCategories,
         body: String,
-        from_id: u8,
         to: Option<String>,
         subject: Option<String>,
     ) -> Self {
         Self {
             cat_id: cat_id.raw_values(),
             body,
-            from_id,
             to,
             subject
         }
@@ -44,7 +41,6 @@ impl ContentsContainer {
                     self.to.as_ref().unwrap().as_str(),
                     self.body.as_str(),
                     self.subject.clone(),
-                    &self.from_id
                 ) {
                     Ok(email) => email,
                     Err(e) => return Err(ContentError::from(e))
