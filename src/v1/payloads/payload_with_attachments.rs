@@ -1,11 +1,10 @@
-use crate::contents::contents_container::ContentsContainer;
-use crate::contents::email::Emails;
-use crate::contents::{deserialize_for_content, ContentCategories, Contents};
-use crate::payloads::payload_without_attachment::PayloadWithoutAttachments;
-use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, DeviceIdTooLarge, HeaderTooLarge, KeyIdTooLarge, NHeaderTooLarge, PayloadTooLarge, SessionIdTooLarge, VersionTooLarge};
-use crate::payloads::{Payloads, PayloadsError};
 use crate::{bit_utils, utils};
 use std::sync::Arc;
+use crate::v1::contents::email::V1Emails;
+use crate::v1::contents::V1Contents;
+use crate::v1::payloads::{V1Payloads, V1PayloadsError};
+use crate::v1::payloads::V1PayloadsError::{HeaderTooLarge, NHeaderTooLarge };
+use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, PayloadTooLarge, SessionIdTooLarge, VersionTooLarge};
 
 const SEG_0_HEADER_SIZE: u8 = 9;
 const SEG_N_HEADER_SIZE: u8 = 2;
@@ -57,7 +56,7 @@ impl PayloadWithAttachments {
         t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
-    ) -> Result<Arc<Self>, PayloadsError> {
+    ) -> Result<Arc<Self>, V1PayloadsError> {
         if version > (2u8.pow(4) - 1) {
             return Err(VersionTooLarge);
         }
@@ -92,7 +91,7 @@ impl PayloadWithAttachments {
         t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
-    ) -> Result<Arc<Self>, PayloadsError> {
+    ) -> Result<Arc<Self>, V1PayloadsError> {
         if payload.len() as u32 > MAX_PAYLOAD_SIZE as u32 {
             return Err(PayloadTooLarge {
                 current: payload.len() as i32,
@@ -118,8 +117,8 @@ impl PayloadWithAttachments {
     /**
     Assumption, payload already processed just needs splitting for transmission
     **/
-    pub fn split(&self) -> crate::payloads::Result<Vec<Arc<dyn Payloads>>> {
-        let mut splits: Vec<Arc<dyn Payloads>> = Vec::new();
+    pub fn split(&self) -> crate::v1::payloads::Result<Vec<Arc<dyn V1Payloads>>> {
+        let mut splits: Vec<Arc<dyn V1Payloads>> = Vec::new();
 
         let mut seg_num :u8 = 0;
 
@@ -136,7 +135,7 @@ impl PayloadWithAttachments {
             items,
         ) {
             Ok(transport) => transport,
-            Err(e) => { return Err(PayloadsError::from(e)); }
+            Err(e) => { return Err(V1PayloadsError::from(e)); }
         };
         splits.push(transport);
 
@@ -151,7 +150,7 @@ impl PayloadWithAttachments {
                 items,
             ) {
                 Ok(transport) => transport,
-                Err(e) => { return Err(PayloadsError::from(e)); }
+                Err(e) => { return Err(V1PayloadsError::from(e)); }
             };
             splits.push(transport);
             seg_num += 1;
@@ -166,18 +165,18 @@ impl PayloadWithAttachments {
 #[uniffi::export]
 pub fn deserialize_payload_with_attachments(
     data: &[u8]
-) -> Result<Arc<PayloadWithAttachments>, PayloadsError> {
+) -> Result<Arc<PayloadWithAttachments>, V1PayloadsError> {
     let version = bit_utils::get_bits(&data[0], 0, 2);
     let i_att = bit_utils::is_bit_on(&data[0], 3);
     let sess_id = match bit_utils::bit_wrap(
         &data[0], 4, &data[1], 3) {
         Ok(s) => s,
-        Err(e) => return Err(PayloadsError::ErrorParsingBits{ error: e }),
+        Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
     };
     let seg_num = match bit_utils::bit_wrap(
         &data[1], 4, &data[2], 3) {
         Ok(s) => s,
-        Err(e) => return Err(PayloadsError::ErrorParsingBits{ error: e }),
+        Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
     };
     let k_id = bit_utils::get_bits(&data[2], 4, 7);
     let t_id = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
@@ -204,7 +203,7 @@ impl PayloadWithAttachmentsNoHeader {
     fn get_payload(&self) -> Vec<u8> { self.payload.clone() }
 
     #[uniffi::constructor]
-    pub fn instance() -> Result<Arc<Self>, PayloadsError> {
+    pub fn instance() -> Result<Arc<Self>, V1PayloadsError> {
         Ok(Arc::new(Self {
             seg_num: 255,
             sess_id: 255,
@@ -217,7 +216,7 @@ impl PayloadWithAttachmentsNoHeader {
         seg_num: u8,
         sess_id: u8,
         payload: Vec<u8>
-    ) -> Result<Arc<Self>, PayloadsError> {
+    ) -> Result<Arc<Self>, V1PayloadsError> {
         if sess_id > (2u8.pow(4) - 1) {
             return Err(SessionIdTooLarge);
         }
@@ -228,7 +227,7 @@ impl PayloadWithAttachmentsNoHeader {
         }))
     }
 
-    pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, PayloadsError> {
+    pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, V1PayloadsError> {
         let seg_num = data[0];
         let sess_id = data[1];
         let payload = data[2..].to_vec();
@@ -243,8 +242,8 @@ impl PayloadWithAttachmentsNoHeader {
 
 
 #[uniffi::export]
-impl Payloads for PayloadWithAttachments {
-    fn serialize(&self) -> crate::payloads::Result<Vec<u8>> {
+impl V1Payloads for PayloadWithAttachments {
+    fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
         let mut byte = bit_utils::put_value(&self.version, 4, self.sess_id, 4);
@@ -274,7 +273,7 @@ impl Payloads for PayloadWithAttachments {
         Ok(bytes)
     }
 
-    fn equals(&self, other: Arc<dyn Payloads>) -> bool {
+    fn equals(&self, other: Arc<dyn V1Payloads>) -> bool {
         match (self.serialize(), other.serialize()) {
             (Ok(a), Ok(b)) => a == b,
             _ => false,
@@ -285,8 +284,8 @@ impl Payloads for PayloadWithAttachments {
 
 
 #[uniffi::export]
-impl Payloads for PayloadWithAttachmentsNoHeader {
-    fn serialize(&self) -> crate::payloads::Result<Vec<u8>> {
+impl V1Payloads for PayloadWithAttachmentsNoHeader {
+    fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut payload = vec![self.sess_id, self.seg_num];
         if payload.len() > SEG_N_HEADER_SIZE as usize {
             return Err(NHeaderTooLarge {
@@ -299,7 +298,7 @@ impl Payloads for PayloadWithAttachmentsNoHeader {
         Ok(payload)
     }
 
-    fn equals(&self, other: Arc<dyn Payloads>) -> bool {
+    fn equals(&self, other: Arc<dyn V1Payloads>) -> bool {
         match (self.serialize(), other.serialize()) {
             (Ok(a), Ok(b)) => a == b,
             _ => false,
@@ -335,7 +334,7 @@ fn att_true_n_serialize() {
     let to  = "example@gmail.com"; //2
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
-    let email = Emails::new(
+    let email = V1Emails::new(
         to,
         body,
         Option::from(subject.to_string()),

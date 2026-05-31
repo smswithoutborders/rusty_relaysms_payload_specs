@@ -1,12 +1,12 @@
 use std::any::Any;
 use std::sync::Arc;
 use crate::{bit_utils, AsAny};
-use crate::contents::{ContentError, Contents};
+use crate::v1::contents::{V1Contents, V1ContentError};
 
-type Result<T> = std::result::Result<T, ContentError>;
+type Result<T> = std::result::Result<T, V1ContentError>;
 
 #[derive(PartialEq, Debug, uniffi::Object)]
-pub struct Emails {
+pub struct V1Emails {
     i_sub: bool,
     len_subject: u8,
     len_to: u8,
@@ -17,7 +17,7 @@ pub struct Emails {
 
 
 #[uniffi::export]
-impl Emails {
+impl V1Emails {
     pub fn get_i_sub(&self) -> bool { self.i_sub }
     pub fn get_len_subject(&self) -> u8 { self.len_subject }
     pub fn get_len_to(&self) -> u8 { self.len_to }
@@ -37,11 +37,11 @@ impl Emails {
             .unwrap_or(0);
 
         if len_subject > (2u8.pow(7) - 1) as usize {
-            return Err(ContentError::SubjectLenTooLarge);
+            return Err(V1ContentError::SubjectLenTooLarge);
         }
 
         if to.len() > (2u8.pow(7) - 1) as usize {
-            return Err(ContentError::ToTooLarge);
+            return Err(V1ContentError::ToTooLarge);
         }
 
         Ok(Arc::new(Self {
@@ -56,7 +56,7 @@ impl Emails {
 
 }
 
-pub fn deserialize_email_content(data: Vec<u8>) -> std::result::Result<Arc<Emails>, ContentError> {
+pub fn v1_deserialize_email_content(data: Vec<u8>) -> std::result::Result<Arc<V1Emails>, V1ContentError> {
     let i_sub = bit_utils::is_bit_on(&data[0], 0);
     let len_subject = bit_utils::get_bits(&data[0], 1, 7);
     let len_to = bit_utils::get_bits(&data[1], 0, 6);
@@ -76,7 +76,7 @@ pub fn deserialize_email_content(data: Vec<u8>) -> std::result::Result<Arc<Email
 
     let body = data[current_index..].to_vec();
 
-    Ok(Arc::new(Emails {
+    Ok(Arc::new(V1Emails {
         i_sub,
         len_subject,
         len_to,
@@ -87,8 +87,8 @@ pub fn deserialize_email_content(data: Vec<u8>) -> std::result::Result<Arc<Email
 }
 
 #[uniffi::export]
-impl Contents for Emails {
-    fn serialize(&self) -> std::result::Result<Vec<u8>, ContentError> {
+impl V1Contents for V1Emails {
+    fn serialize(&self) -> std::result::Result<Vec<u8>, V1ContentError> {
         let mut bytes: Vec<u8> = Vec::new(); // TODO: put size here
 
         let mut byte: u8 = if self.i_sub { 1 } else { 0 };
@@ -112,7 +112,7 @@ impl Contents for Emails {
 
     fn get_cat_id(&self) -> u8 { 0 }
 
-    fn equals(&self, other: Arc<dyn Contents>) -> bool {
+    fn equals(&self, other: Arc<dyn V1Contents>) -> bool {
         match (self.serialize(), other.serialize()) {
             (Ok(a), Ok(b)) => a == b,
             _ => false,
@@ -127,14 +127,14 @@ fn test_email_init() {
     let to  = "example@gmail.com"; //2
     let body = "Here is some heavy Lorem Ipsum shit"; //4
     let subject = "More things"; //7
-    let email = Emails::new(
+    let email = V1Emails::new(
         to,
         body,
         Option::from(subject.to_string()),
     ).unwrap();
 
     let serialized = email.serialize().unwrap();
-    let deserialized = deserialize_email_content(serialized).unwrap();
+    let deserialized = v1_deserialize_email_content(serialized).unwrap();
 
     assert_eq!(email, deserialized);
     // assert_eq!((2 + to.len() + body.len() + subject.len()), serialized.len());

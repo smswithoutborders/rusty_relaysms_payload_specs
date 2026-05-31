@@ -25,10 +25,9 @@ pub fn get_version() -> u8 {
     VERSION
 }
 
-pub mod contents;
 pub mod bit_utils;
-pub mod payloads;
 pub mod utils;
+pub mod v1;
 
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;

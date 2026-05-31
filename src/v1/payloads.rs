@@ -1,18 +1,13 @@
 use std::fmt::Debug;
 use std::sync::Arc;
-use crate::bit_utils;
 use crate::bit_utils::BitParsingError;
-use crate::contents::{ContentError, Contents};
-use crate::contents::email::{Emails};
-use crate::payloads::payload_with_attachments::{PayloadWithAttachments};
-use crate::payloads::payload_without_attachment::PayloadWithoutAttachments;
 
 pub mod payload_with_attachments;
 pub mod payload_without_attachment;
-type Result<T> = std::result::Result<T, PayloadsError>;
+type Result<T> = std::result::Result<T, V1PayloadsError>;
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
-pub enum PayloadsError {
+pub enum V1PayloadsError {
     #[error("Version too large")]
     VersionTooLarge,
 
@@ -72,19 +67,19 @@ pub enum PayloadsError {
 }
 
 #[uniffi::export(with_foreign)]
-pub trait Payloads: Debug + Send + Sync {
+pub trait V1Payloads: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn Payloads>) -> bool;
+    fn equals(&self, other: Arc<dyn V1Payloads>) -> bool;
 }
 
 #[uniffi::export(with_foreign)]
-pub trait PayloadsWithoutAttachments: Debug + Send + Sync {
+pub trait V1PayloadsWithoutAttachments: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn PayloadsWithoutAttachments>) -> bool;
+    fn equals(&self, other: Arc<dyn V1PayloadsWithoutAttachments>) -> bool;
 }
 
 #[uniffi::export(with_foreign)]
-pub trait PayloadsWithAttachments: Debug + Send + Sync {
+pub trait V1PayloadsWithAttachments: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn PayloadsWithAttachments>) -> bool;
+    fn equals(&self, other: Arc<dyn V1PayloadsWithAttachments>) -> bool;
 }
