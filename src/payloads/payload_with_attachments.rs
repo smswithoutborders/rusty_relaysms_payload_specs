@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use crate::{bit_utils, utils};
-use crate::contents::{deserialize_for_content, ContentCategories, Contents};
 use crate::contents::contents_container::ContentsContainer;
 use crate::contents::email::Emails;
-use crate::payloads::{Payloads, PayloadsError};
+use crate::contents::{deserialize_for_content, ContentCategories, Contents};
 use crate::payloads::payload_without_attachment::PayloadWithoutAttachments;
-use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, DeviceIdTooLarge, EncryptionIdTooLarge, HeaderTooLarge, KeyIdTooLarge, NHeaderTooLarge, PayloadTooLarge, SessionIdTooLarge, VersionTooLarge};
+use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, DeviceIdTooLarge, HeaderTooLarge, KeyIdTooLarge, NHeaderTooLarge, PayloadTooLarge, SessionIdTooLarge, VersionTooLarge};
+use crate::payloads::{Payloads, PayloadsError};
+use crate::{bit_utils, utils};
+use std::sync::Arc;
 
-const SEG_0_HEADER_SIZE: u8 = 10;
+const SEG_0_HEADER_SIZE: u8 = 9;
 const SEG_N_HEADER_SIZE: u8 = 2;
 const MAX_PAYLOAD_SIZE: u8 = 138;
 
@@ -18,7 +18,6 @@ pub struct PayloadWithAttachments {
     seg_num: u8,
     sess_id: u8,
     k_id: u8,
-    e_id: u8,
     len_att: u16,
     t_id: u32,
     payload: Vec<u8>,
@@ -38,7 +37,6 @@ impl PayloadWithAttachments {
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_seg_num(&self) -> u8 { self.seg_num }
     pub fn get_sess_id(&self) -> u8 { self.sess_id }
-    pub fn get_e_id(&self) -> u8 { self.e_id }
     pub fn get_k_id(&self) -> u8 { self.k_id }
     pub fn get_t_id(&self) -> u32 { self.t_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
@@ -55,7 +53,6 @@ impl PayloadWithAttachments {
     pub fn new(
         version: u8,
         sess_id: u8,
-        e_id: u8,
         k_id: u8,
         t_id: u32,
         len_att: u16,
@@ -66,9 +63,6 @@ impl PayloadWithAttachments {
         }
         if sess_id > (2u8.pow(4) - 1) {
             return Err(SessionIdTooLarge);
-        }
-        if e_id > (2u8.pow(3) - 1) {
-            return Err(EncryptionIdTooLarge);
         }
         if k_id > (2u8.pow(4) - 1) {
             return Err(KeyIdTooLarge);
@@ -81,7 +75,6 @@ impl PayloadWithAttachments {
             version,
             seg_num: 0,
             sess_id,
-            e_id,
             k_id,
             t_id,
             len_att,
@@ -96,7 +89,6 @@ impl PayloadWithAttachments {
         seg_num: u8,
         sess_id: u8,
         k_id: u8,
-        e_id: u8,
         t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
@@ -115,7 +107,6 @@ impl PayloadWithAttachments {
             version,
             seg_num,
             sess_id,
-            e_id,
             k_id,
             t_id,
             len_att,
@@ -140,7 +131,6 @@ impl PayloadWithAttachments {
             seg_num,
             self.sess_id,
             self.k_id,
-            self.e_id,
             self.t_id,
             self.payload.len() as u16,
             items,
@@ -190,10 +180,9 @@ pub fn deserialize_payload_with_attachments(
         Err(e) => return Err(PayloadsError::ErrorParsingBits{ error: e }),
     };
     let k_id = bit_utils::get_bits(&data[2], 4, 7);
-    let e_id = bit_utils::get_bits(&data[3], 0, 2);
-    let t_id = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-    let len_att = u16::from_le_bytes([data[8], data[9]]);
-    let payload = data[10..].to_vec();
+    let t_id = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let len_att = u16::from_le_bytes([data[7], data[8]]);
+    let payload = data[9..].to_vec();
 
     Ok(Arc::new(PayloadWithAttachments {
         i_att,
@@ -201,7 +190,6 @@ pub fn deserialize_payload_with_attachments(
         seg_num,
         sess_id,
         k_id,
-        e_id,
         t_id,
         len_att,
         payload
@@ -211,7 +199,6 @@ pub fn deserialize_payload_with_attachments(
 
 #[uniffi::export]
 impl PayloadWithAttachmentsNoHeader {
-
     fn get_seg_num(&self) -> u8 { self.seg_num }
     fn get_sess_id(&self) -> u8 { self.sess_id }
     fn get_payload(&self) -> Vec<u8> { self.payload.clone() }
@@ -272,7 +259,6 @@ impl Payloads for PayloadWithAttachments {
         byte = bit_utils::put_value(&byte, 4, self.k_id, 4);
         bytes.push(byte);
 
-        bytes.push(self.e_id);
         bytes.extend(self.t_id.to_le_bytes());
         bytes.extend(self.len_att.to_le_bytes());
 
@@ -328,7 +314,6 @@ impl PartialEq for PayloadWithAttachments {
             && self.version == other.version
             && self.seg_num == other.seg_num
             && self.sess_id == other.sess_id
-            && self.e_id == other.e_id
             && self.k_id == other.k_id
             && self.t_id == other.t_id
             && self.len_att == other.len_att
@@ -359,7 +344,6 @@ fn att_true_n_serialize() {
     let version: u8 = 1;
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
-    let e_id: u8 = 1;
     let k_id: u8 = 1;
     let f_id: u32 = 255;
 
@@ -372,7 +356,6 @@ fn att_true_n_serialize() {
         version,
         sess_num,
         k_id,
-        e_id,
         f_id,
         len_att,
         payload.clone(),
@@ -400,17 +383,14 @@ fn test_calculate_segments() {
     let version: u8 = 1;
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
-    let e_id: u8 = 1;
-    let k_id: u8 = 1;
+    let k_id: u8 = 7;
     let f_id: u32 = 255;
-    let device_id: Option<Vec<u8>> = Some(rand::random::<[u8; 16]>().to_vec());
     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
     let mut ins = PayloadWithAttachments::new(
         version,
         seg_num,
         sess_num,
-        e_id,
         f_id,
         LEN_ATT as u16,
         payload.clone(),
@@ -437,26 +417,10 @@ fn test_calculate_segments() {
 
 #[test]
 fn att_split() {
-    let to  = "example@gmail.com"; //2
-    let body = "Here is some heavy Lorem Ipsum shit"; //4
-    let subject = "More things"; //7
-    let from_id: u8 = 7; // 1
-
-    let container = ContentsContainer::new(
-        ContentCategories::Email,
-        body.to_string(),
-        Some(to.to_string()),
-        Some(subject.to_string())
-    );
-    let email = container.instance().unwrap();
-
     let version: u8 = 1;
-    let seg_num: u8 = 1;
     let sess_num: u8 = 1;
-    let e_id: u8 = 1;
     let k_id: u8 = 1;
     let f_id: u32 = 255;
-    let device_id: Option<Vec<u8>> = Some(rand::random::<[u8; 16]>().to_vec());
 
     // let mut payload = email.serialize().unwrap();
     // const len_att: usize = MAX_SPLIT_0_WITH_DID as usize + 1;
@@ -467,7 +431,6 @@ fn att_split() {
         version,
         sess_num,
         k_id,
-        e_id,
         f_id,
         LEN_ATT as u16,
         payload.clone(),

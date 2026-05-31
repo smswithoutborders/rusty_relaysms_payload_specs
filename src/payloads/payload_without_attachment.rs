@@ -1,10 +1,9 @@
 use std::sync::Arc;
-use crate::{bit_utils, utils};
+use crate::{bit_utils};
 use crate::contents::{deserialize_for_content, Contents};
 use crate::contents::email::Emails;
-use crate::payloads::{Payloads, PayloadsError, PayloadsWithoutAttachments};
-use crate::payloads::payload_with_attachments::{PayloadWithAttachments, PayloadWithAttachmentsNoHeader};
-use crate::payloads::PayloadsError::{CategoryIdTooLarge, ContentDeserializationError, ContentSerializationError, DeviceIdTooLarge, EncryptionIdTooLarge, KeyIdTooLarge, MissingDeviceID, MissingPayload, SessionIdTooLarge, VersionTooLarge};
+use crate::payloads::{Payloads, PayloadsError};
+use crate::payloads::PayloadsError::{ContentDeserializationError, ContentSerializationError, KeyIdTooLarge, MissingPayload, VersionTooLarge};
 
 
 #[derive(Debug, uniffi::Object)]
@@ -12,7 +11,6 @@ pub struct PayloadWithoutAttachments {
     i_att: bool,
     version: u8,
     k_id: u8,
-    e_id: u8,
     t_id: u32,
     payload: Option<Arc<dyn Contents>>,
 }
@@ -21,7 +19,6 @@ pub struct PayloadWithoutAttachments {
 #[uniffi::export]
 impl PayloadWithoutAttachments {
     pub fn get_version(&self) -> u8 { self.version }
-    pub fn get_e_id(&self) -> u8 { self.e_id }
     pub fn get_k_id(&self) -> u8 { self.k_id }
     pub fn get_t_id(&self) -> u32 { self.t_id }
     pub fn get_payload_content(&self) -> Option<Arc<dyn Contents>> { self.payload.clone() }
@@ -29,16 +26,12 @@ impl PayloadWithoutAttachments {
     #[uniffi::constructor]
     pub fn new(
         version: u8,
-        e_id: u8,
         k_id: u8,
         t_id: u32,
         payload: Option<Arc<dyn Contents>>,
     ) -> Result<Arc<Self>, PayloadsError> {
         if version > (2u8.pow(4) - 1) {
             return Err(VersionTooLarge);
-        }
-        if e_id > (2u8.pow(3) - 1) {
-            return Err(EncryptionIdTooLarge);
         }
         if k_id > (2u8.pow(4) - 1) {
             return Err(KeyIdTooLarge);
@@ -47,7 +40,6 @@ impl PayloadWithoutAttachments {
         Ok(Arc::new(Self {
             i_att: false,
             version,
-            e_id,
             k_id,
             t_id,
             payload,
@@ -63,12 +55,11 @@ pub fn deserialize_payload_without_attachments(
     let version = bit_utils::get_bits(&data[0], 0, 6);
     let i_att = bit_utils::is_bit_on(&data[0], 7);
     let k_id = data[1];
-    let e_id = bit_utils::get_bits(&data[2], 0, 3);
-    let t_id = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let t_id = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
     let cat_id = 0; // TODO("Figure this out")
     let payload = match deserialize_for_content(
         cat_id,
-        data[7..].to_vec()
+        data[6..].to_vec()
     ) {
         Ok(payload) => Some(payload),
         Err(e) => return Err(ContentDeserializationError) // TODO: put in the error
@@ -78,7 +69,6 @@ pub fn deserialize_payload_without_attachments(
         i_att,
         version,
         k_id,
-        e_id,
         t_id,
         payload
     }))
@@ -88,7 +78,6 @@ pub fn deserialize_payload_without_attachments(
 impl PartialEq for PayloadWithoutAttachments {
     fn eq(&self, other: &Self) -> bool {
         self.version == other.version
-            && self.e_id == other.e_id
             && self.k_id == other.k_id
             && self.i_att == other.i_att
             && self.t_id == other.t_id
@@ -113,7 +102,6 @@ impl Payloads for PayloadWithoutAttachments {
         bytes.push(byte1);
 
         bytes.push(self.k_id);
-        bytes.push(self.e_id);
         bytes.extend(self.t_id.to_le_bytes());
 
         let payload = match self.payload.as_ref().unwrap().serialize() {
@@ -151,7 +139,6 @@ fn att_false_serialize() {
 
     let transport_att_false = PayloadWithoutAttachments::new(
         version,
-        e_id,
         k_id,
         t_id,
         payload,

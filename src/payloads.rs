@@ -16,9 +16,6 @@ pub enum PayloadsError {
     #[error("Version too large")]
     VersionTooLarge,
 
-    #[error("Encryption ID too large")]
-    EncryptionIdTooLarge,
-
     #[error("Segment less than one")]
     SegmentLessThanOne,
 
