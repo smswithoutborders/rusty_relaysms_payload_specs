@@ -1,7 +1,7 @@
-use aead::{Error, Payload};
+use aead::{Payload};
 use sha2::Sha256;
 use hkdf::Hkdf;
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
+use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -67,7 +67,7 @@ fn v1_token_encrypt(
     ss_kid_pk: Vec<u8>,
     es_kid_pk: Vec<u8>,
     method_name: Vec<u8>,
-    key_id: Vec<u8>,
+    key_id: u8,
 ) -> Result<Vec<u8>, V1CryptographicError> {
     let len = method_name.len().to_le_bytes();
     let request_string = [len.as_slice(), method_name.as_slice()].concat();
@@ -77,8 +77,12 @@ fn v1_token_encrypt(
     let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
     let ec_kid = StaticSecret::from(ec_kid);
     let ec_kid_pk = PublicKey::from(&ec_kid);
-    let associated_data = [key_id, ec_kid_pk.to_bytes().to_vec(), es_kid_pk.clone()]
-        .concat();
+    let associated_data = [
+        key_id.to_le_bytes().to_vec(),
+        ec_kid_pk.to_bytes().to_vec(),
+        es_kid_pk.clone()
+    ].concat();
+
     let payload = Payload {
         msg: request_string.as_slice(),
         aad: associated_data.as_slice(),
@@ -110,11 +114,15 @@ fn v1_token_decrypt(
     es_kid_pk: Vec<u8>,
     ss_kid: Vec<u8>,
     es_kid: Vec<u8>,
-    key_id: Vec<u8>,
+    key_id: u8,
     received_payload: Vec<u8>,
 ) -> Result<Vec<u8>, V1CryptographicError> {
     let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
-    let associated_data = [key_id, ec_kid_pk.clone(), es_kid_pk.clone()].concat();
+    let associated_data = [
+        key_id.to_le_bytes().to_vec(),
+        ec_kid_pk.clone(),
+        es_kid_pk.clone()
+    ].concat();
     let payload = Payload {
         msg: received_payload.as_slice(),
         aad: associated_data.as_slice(),
@@ -232,13 +240,13 @@ fn test_token_encryption_decryption() {
     let es_kid_pk = PublicKey::from(&es_kid).as_bytes().to_vec();
 
     let method_name= b"Sample method name";
-    let key_id= 255u8.to_le_bytes();
+    let key_id= 255u8;
     let ciphertext = v1_token_encrypt(
         ec_kid.as_bytes().to_vec(),
         ss_kid_pk,
         es_kid_pk,
         method_name.to_vec(),
-        key_id.to_vec(),
+        key_id,
     ).unwrap();
 
     let ec_kid_pk = PublicKey::from(&ec_kid).as_bytes().to_vec();
@@ -250,7 +258,7 @@ fn test_token_encryption_decryption() {
         es_kid_pk,
         ss_kid,
         es_kid,
-        key_id.to_vec(),
+        key_id,
         ciphertext,
     ).unwrap();
     // remove len method name
