@@ -1,4 +1,4 @@
-use crate::{bit_utils, utils};
+use crate::{bit_utils, utils, v1};
 use std::sync::Arc;
 use crate::v1::contents::email::V1Emails;
 use crate::v1::contents::V1Contents;
@@ -10,7 +10,7 @@ const SEG_0_HEADER_SIZE: u8 = 9;
 const SEG_N_HEADER_SIZE: u8 = 2;
 const MAX_PAYLOAD_SIZE: u8 = 138;
 
-#[derive(Debug, uniffi::Object)]
+#[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithAttachments {
     i_att: bool,
     version: u8,
@@ -22,7 +22,7 @@ pub struct V1PayloadWithAttachments {
     payload: Vec<u8>,
 }
 
-#[derive(Debug, uniffi::Object)]
+#[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithAttachmentsNoHeader {
     seg_num: u8,
     sess_id: u8,
@@ -50,16 +50,12 @@ impl V1PayloadWithAttachments {
 
     #[uniffi::constructor]
     pub fn new(
-        version: u8,
         sess_id: u8,
         k_id: u8,
         t_id: u32,
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
-        if version > (2u8.pow(4) - 1) {
-            return Err(VersionTooLarge);
-        }
         if sess_id > (2u8.pow(4) - 1) {
             return Err(SessionIdTooLarge);
         }
@@ -69,6 +65,7 @@ impl V1PayloadWithAttachments {
 
         let i_att = !payload.is_empty();
 
+        let version = v1::get_version();
         Ok(Arc::new(Self {
             i_att,
             version,
@@ -84,7 +81,6 @@ impl V1PayloadWithAttachments {
 
     #[uniffi::constructor]
     pub fn new_segment(
-        version: u8,
         seg_num: u8,
         sess_id: u8,
         k_id: u8,
@@ -101,6 +97,7 @@ impl V1PayloadWithAttachments {
 
         let i_att = !payload.is_empty();
 
+        let version = v1::get_version();
         Ok(Arc::new(Self {
             i_att,
             version,
@@ -126,7 +123,6 @@ impl V1PayloadWithAttachments {
         let items = utils::take_n_from(&self.payload, 0, max_value as usize);
         let mut start_index: usize = items.len();
         let transport = match V1PayloadWithAttachments::new_segment(
-            self.version,
             seg_num,
             self.sess_id,
             self.k_id,
@@ -306,29 +302,6 @@ impl V1Payloads for V1PayloadWithAttachmentsNoHeader {
     }
 }
 
-
-impl PartialEq for V1PayloadWithAttachments {
-    fn eq(&self, other: &Self) -> bool {
-        self.i_att == other.i_att
-            && self.version == other.version
-            && self.seg_num == other.seg_num
-            && self.sess_id == other.sess_id
-            && self.k_id == other.k_id
-            && self.t_id == other.t_id
-            && self.len_att == other.len_att
-            && self.payload == other.payload
-    }
-}
-
-impl PartialEq for V1PayloadWithAttachmentsNoHeader {
-    fn eq(&self, other: &Self) -> bool {
-        self.seg_num == other.seg_num
-            && self.sess_id == other.sess_id
-            && self.payload == other.payload
-    }
-}
-
-
 #[test]
 fn att_true_n_serialize() {
     let to  = "example@gmail.com"; //2
@@ -340,7 +313,6 @@ fn att_true_n_serialize() {
         Option::from(subject.to_string()),
     ).unwrap();
 
-    let version: u8 = 1;
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
     let k_id: u8 = 1;
@@ -352,7 +324,6 @@ fn att_true_n_serialize() {
     payload.extend(att);
 
     let payload_with_attachment = V1PayloadWithAttachments::new(
-        version,
         sess_num,
         k_id,
         f_id,
@@ -379,15 +350,12 @@ fn att_true_n_serialize() {
 
 #[test]
 fn test_calculate_segments() {
-    let version: u8 = 1;
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
-    let k_id: u8 = 7;
     let f_id: u32 = 255;
     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
     let mut ins = V1PayloadWithAttachments::new(
-        version,
         seg_num,
         sess_num,
         f_id,
@@ -416,7 +384,6 @@ fn test_calculate_segments() {
 
 #[test]
 fn att_split() {
-    let version: u8 = 1;
     let sess_num: u8 = 1;
     let k_id: u8 = 1;
     let f_id: u32 = 255;
@@ -427,7 +394,6 @@ fn att_split() {
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
 
     let payload_with_attachment = V1PayloadWithAttachments::new(
-        version,
         sess_num,
         k_id,
         f_id,

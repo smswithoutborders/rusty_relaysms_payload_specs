@@ -76,25 +76,3 @@ pub trait V1Contents: Debug + Send + Sync {
     fn get_cat_id(&self) -> u8;
     fn equals(&self, other: Arc<dyn V1Contents>) -> bool;
 }
-
-pub fn v1_deserialize_for_content(cat_id: u8, payload: Vec<u8>) -> Result<Arc<dyn V1Contents>, V1ContentError> {
-    match cat_id {
-        0 => {
-            // email
-            Ok(v1_deserialize_email_content(payload)?)
-        }
-        1 => {
-            todo!()
-        }
-        2 => {
-            todo!()
-        }
-        3 => {
-            todo!()
-        }
-        4 => {
-            todo!()
-        }
-        _ => Err(V1ContentError::InvalidCategoryId)
-    }
-}

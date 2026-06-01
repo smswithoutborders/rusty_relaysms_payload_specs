@@ -1,42 +1,40 @@
 use std::sync::Arc;
-use crate::{bit_utils};
-use crate::v1::contents::{v1_deserialize_for_content, V1Contents};
+use crate::{bit_utils, v1};
+use crate::v1::contents::{V1Contents};
 use crate::v1::contents::email::V1Emails;
+use crate::v1::get_version;
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{ContentDeserializationError, ContentSerializationError, KeyIdTooLarge, MissingPayload, VersionTooLarge};
 
 
-#[derive(Debug, uniffi::Object)]
-pub struct PayloadWithoutAttachments {
+#[derive(Debug, PartialEq, uniffi::Object)]
+pub struct V1PayloadWithoutAttachments {
     i_att: bool,
     version: u8,
     k_id: u8,
     t_id: u32,
-    payload: Option<Arc<dyn V1Contents>>,
+    payload: Vec<u8>,
 }
 
 
 #[uniffi::export]
-impl PayloadWithoutAttachments {
+impl V1PayloadWithoutAttachments {
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_k_id(&self) -> u8 { self.k_id }
     pub fn get_t_id(&self) -> u32 { self.t_id }
-    pub fn get_payload_content(&self) -> Option<Arc<dyn V1Contents>> { self.payload.clone() }
+    pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
     #[uniffi::constructor]
     pub fn new(
-        version: u8,
         k_id: u8,
         t_id: u32,
-        payload: Option<Arc<dyn V1Contents>>,
+        payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
-        if version > (2u8.pow(4) - 1) {
-            return Err(VersionTooLarge);
-        }
         if k_id > (2u8.pow(4) - 1) {
             return Err(KeyIdTooLarge);
         }
 
+        let version = v1::get_version();
         Ok(Arc::new(Self {
             i_att: false,
             version,
@@ -49,23 +47,16 @@ impl PayloadWithoutAttachments {
 
 
 #[uniffi::export]
-pub fn deserialize_payload_without_attachments(
+pub fn v1_deserialize_payload_without_attachments(
     data: &[u8]
-) -> Result<Arc<PayloadWithoutAttachments>, V1PayloadsError> {
+) -> Result<Arc<V1PayloadWithoutAttachments>, V1PayloadsError> {
     let version = bit_utils::get_bits(&data[0], 0, 6);
     let i_att = bit_utils::is_bit_on(&data[0], 7);
     let k_id = data[1];
     let t_id = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
-    let cat_id = 0; // TODO("Figure this out")
-    let payload = match v1_deserialize_for_content(
-        cat_id,
-        data[6..].to_vec()
-    ) {
-        Ok(payload) => Some(payload),
-        Err(e) => return Err(ContentDeserializationError) // TODO: put in the error
-    };
+    let payload = data[6..].to_vec();
 
-    Ok(Arc::new( PayloadWithoutAttachments {
+    Ok(Arc::new( V1PayloadWithoutAttachments {
         i_att,
         version,
         k_id,
@@ -74,27 +65,9 @@ pub fn deserialize_payload_without_attachments(
     }))
 }
 
-
-impl PartialEq for PayloadWithoutAttachments {
-    fn eq(&self, other: &Self) -> bool {
-        self.version == other.version
-            && self.k_id == other.k_id
-            && self.i_att == other.i_att
-            && self.t_id == other.t_id
-            && self.payload.as_ref()
-            .zip(self.payload.as_ref())
-            .map_or(false, |(a, b)| Arc::ptr_eq(a, b))
-    }
-}
-
-
 #[uniffi::export]
-impl V1Payloads for PayloadWithoutAttachments {
+impl V1Payloads for V1PayloadWithoutAttachments {
     fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
-        if !self.payload.is_some() {
-            return Err(MissingPayload)
-        }
-
         let mut bytes: Vec<u8> = Vec::new();
 
         let mut byte1 : u8 = bit_utils::put_value(&0, 0, self.version, 1);
@@ -103,12 +76,7 @@ impl V1Payloads for PayloadWithoutAttachments {
 
         bytes.push(self.k_id);
         bytes.extend(self.t_id.to_le_bytes());
-
-        let payload = match self.payload.as_ref().unwrap().serialize() {
-            Ok(payload) => payload,
-            Err(e) => return Err(ContentSerializationError)
-        };
-        bytes.extend(payload);
+        bytes.extend(self.payload.clone());
         Ok(bytes)
     }
 
@@ -131,20 +99,17 @@ fn att_false_serialize() {
         Option::from(subject.to_string()),
     ).unwrap();
 
-    let version: u8 = 1;
-    let e_id: u8 = 5;
     let k_id: u8 = 7;
     let t_id: u32 = 2;
-    let payload: Option<Arc<dyn V1Contents>> = Some(email);
+    let payload = email.serialize().unwrap();
 
-    let transport_att_false = PayloadWithoutAttachments::new(
-        version,
+    let transport_att_false = V1PayloadWithoutAttachments::new(
         k_id,
         t_id,
         payload,
     ).unwrap();
 
     let serialized = transport_att_false.serialize().unwrap();
-    let deserialized = deserialize_payload_without_attachments(&serialized).unwrap();
+    let deserialized = v1_deserialize_payload_without_attachments(&serialized).unwrap();
     assert_eq!(transport_att_false, deserialized);
 }

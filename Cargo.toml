@@ -15,7 +15,7 @@ thiserror = "2.0.18"
 sha2 = "0.11.0"
 hkdf = "0.13.0"
 hex-literal = "1.1.0"
-x25519-dalek = { version="2", features=["static_secrets"]}
+x25519-dalek = { version="2", features=["static_secrets", "reusable_secrets"]}
 aes-gcm = "0.11.0-rc.4"
 aead = "0.6.0-rc.10"
 chacha20poly1305 = "0.11.0-rc.3"
