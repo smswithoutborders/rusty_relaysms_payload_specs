@@ -11,7 +11,7 @@ const SEG_N_HEADER_SIZE: u8 = 2;
 const MAX_PAYLOAD_SIZE: u8 = 138;
 
 #[derive(Debug, uniffi::Object)]
-pub struct PayloadWithAttachments {
+pub struct V1PayloadWithAttachments {
     i_att: bool,
     version: u8,
     seg_num: u8,
@@ -23,7 +23,7 @@ pub struct PayloadWithAttachments {
 }
 
 #[derive(Debug, uniffi::Object)]
-pub struct PayloadWithAttachmentsNoHeader {
+pub struct V1PayloadWithAttachmentsNoHeader {
     seg_num: u8,
     sess_id: u8,
     payload: Vec<u8>
@@ -31,7 +31,7 @@ pub struct PayloadWithAttachmentsNoHeader {
 
 
 #[uniffi::export]
-impl PayloadWithAttachments {
+impl V1PayloadWithAttachments {
     pub fn get_i_att(&self) -> bool { self.i_att }
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_seg_num(&self) -> u8 { self.seg_num }
@@ -125,7 +125,7 @@ impl PayloadWithAttachments {
         let max_value = MAX_PAYLOAD_SIZE - SEG_0_HEADER_SIZE;
         let items = utils::take_n_from(&self.payload, 0, max_value as usize);
         let mut start_index: usize = items.len();
-        let transport = match PayloadWithAttachments::new_segment(
+        let transport = match V1PayloadWithAttachments::new_segment(
             self.version,
             seg_num,
             self.sess_id,
@@ -144,7 +144,7 @@ impl PayloadWithAttachments {
         while start_index < self.payload.len() {
             let items = utils::take_n_from(&self.payload, start_index, max_value as usize);
             start_index += items.len();
-            let transport = match PayloadWithAttachmentsNoHeader::new(
+            let transport = match V1PayloadWithAttachmentsNoHeader::new(
                 seg_num,
                 self.sess_id,
                 items,
@@ -165,7 +165,7 @@ impl PayloadWithAttachments {
 #[uniffi::export]
 pub fn deserialize_payload_with_attachments(
     data: &[u8]
-) -> Result<Arc<PayloadWithAttachments>, V1PayloadsError> {
+) -> Result<Arc<V1PayloadWithAttachments>, V1PayloadsError> {
     let version = bit_utils::get_bits(&data[0], 0, 2);
     let i_att = bit_utils::is_bit_on(&data[0], 3);
     let sess_id = match bit_utils::bit_wrap(
@@ -183,7 +183,7 @@ pub fn deserialize_payload_with_attachments(
     let len_att = u16::from_le_bytes([data[7], data[8]]);
     let payload = data[9..].to_vec();
 
-    Ok(Arc::new(PayloadWithAttachments {
+    Ok(Arc::new(V1PayloadWithAttachments {
         i_att,
         version,
         seg_num,
@@ -197,7 +197,7 @@ pub fn deserialize_payload_with_attachments(
 
 
 #[uniffi::export]
-impl PayloadWithAttachmentsNoHeader {
+impl V1PayloadWithAttachmentsNoHeader {
     fn get_seg_num(&self) -> u8 { self.seg_num }
     fn get_sess_id(&self) -> u8 { self.sess_id }
     fn get_payload(&self) -> Vec<u8> { self.payload.clone() }
@@ -242,7 +242,7 @@ impl PayloadWithAttachmentsNoHeader {
 
 
 #[uniffi::export]
-impl V1Payloads for PayloadWithAttachments {
+impl V1Payloads for V1PayloadWithAttachments {
     fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
@@ -284,7 +284,7 @@ impl V1Payloads for PayloadWithAttachments {
 
 
 #[uniffi::export]
-impl V1Payloads for PayloadWithAttachmentsNoHeader {
+impl V1Payloads for V1PayloadWithAttachmentsNoHeader {
     fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut payload = vec![self.sess_id, self.seg_num];
         if payload.len() > SEG_N_HEADER_SIZE as usize {
@@ -307,7 +307,7 @@ impl V1Payloads for PayloadWithAttachmentsNoHeader {
 }
 
 
-impl PartialEq for PayloadWithAttachments {
+impl PartialEq for V1PayloadWithAttachments {
     fn eq(&self, other: &Self) -> bool {
         self.i_att == other.i_att
             && self.version == other.version
@@ -320,7 +320,7 @@ impl PartialEq for PayloadWithAttachments {
     }
 }
 
-impl PartialEq for PayloadWithAttachmentsNoHeader {
+impl PartialEq for V1PayloadWithAttachmentsNoHeader {
     fn eq(&self, other: &Self) -> bool {
         self.seg_num == other.seg_num
             && self.sess_id == other.sess_id
@@ -351,7 +351,7 @@ fn att_true_n_serialize() {
     let len_att = att.len() as u16;
     payload.extend(att);
 
-    let payload_with_attachment = PayloadWithAttachments::new(
+    let payload_with_attachment = V1PayloadWithAttachments::new(
         version,
         sess_num,
         k_id,
@@ -364,14 +364,14 @@ fn att_true_n_serialize() {
     let deserialized = deserialize_payload_with_attachments(&serialized).unwrap();
     assert_eq!(payload_with_attachment, deserialized);
 
-    let payload_with_n_attachment = PayloadWithAttachmentsNoHeader::new(
+    let payload_with_n_attachment = V1PayloadWithAttachmentsNoHeader::new(
         seg_num,
         sess_num,
         payload,
     ).unwrap();
 
     let serialized = payload_with_n_attachment.serialize().unwrap();
-    let deserialized = PayloadWithAttachmentsNoHeader::instance().unwrap()
+    let deserialized = V1PayloadWithAttachmentsNoHeader::instance().unwrap()
         .deserialize(&serialized).unwrap();
     assert_eq!(payload_with_n_attachment, deserialized);
 }
@@ -386,7 +386,7 @@ fn test_calculate_segments() {
     let f_id: u32 = 255;
     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
-    let mut ins = PayloadWithAttachments::new(
+    let mut ins = V1PayloadWithAttachments::new(
         version,
         seg_num,
         sess_num,
@@ -426,7 +426,7 @@ fn att_split() {
     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
 
-    let payload_with_attachment = PayloadWithAttachments::new(
+    let payload_with_attachment = V1PayloadWithAttachments::new(
         version,
         sess_num,
         k_id,

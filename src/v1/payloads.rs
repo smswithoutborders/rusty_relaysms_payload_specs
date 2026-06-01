@@ -72,14 +72,14 @@ pub trait V1Payloads: Debug + Send + Sync {
     fn equals(&self, other: Arc<dyn V1Payloads>) -> bool;
 }
 
-#[uniffi::export(with_foreign)]
-pub trait V1PayloadsWithoutAttachments: Debug + Send + Sync {
-    fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn V1PayloadsWithoutAttachments>) -> bool;
-}
-
-#[uniffi::export(with_foreign)]
-pub trait V1PayloadsWithAttachments: Debug + Send + Sync {
-    fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn V1PayloadsWithAttachments>) -> bool;
-}
+// #[uniffi::export(with_foreign)]
+// pub trait V1PayloadsWithoutAttachments: Debug + Send + Sync {
+//     fn serialize(&self) -> Result<Vec<u8>>;
+//     fn equals(&self, other: Arc<dyn V1PayloadsWithoutAttachments>) -> bool;
+// }
+// 
+// #[uniffi::export(with_foreign)]
+// pub trait V1PayloadsWithAttachments: Debug + Send + Sync {
+//     fn serialize(&self) -> Result<Vec<u8>>;
+//     fn equals(&self, other: Arc<dyn V1PayloadsWithAttachments>) -> bool;
+// }
