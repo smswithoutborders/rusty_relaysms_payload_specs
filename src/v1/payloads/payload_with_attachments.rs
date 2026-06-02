@@ -12,8 +12,9 @@ const MAX_PAYLOAD_SIZE: u8 = 138;
 
 #[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithAttachments {
-    i_att: bool,
     version: u8,
+    i_tid: bool,
+    i_att: bool,
     seg_num: u8,
     sess_id: u8,
     k_id: u8,
@@ -33,6 +34,7 @@ pub struct V1PayloadWithAttachmentsNoHeader {
 #[uniffi::export]
 impl V1PayloadWithAttachments {
     pub fn get_i_att(&self) -> bool { self.i_att }
+    pub fn get_i_tid(&self) -> bool { self.i_tid }
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_seg_num(&self) -> u8 { self.seg_num }
     pub fn get_sess_id(&self) -> u8 { self.sess_id }
@@ -56,7 +58,7 @@ impl V1PayloadWithAttachments {
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
-        if sess_id > (2u8.pow(4) - 1) {
+        if sess_id > (2u8.pow(3) - 1) {
             return Err(SessionIdTooLarge);
         }
         if k_id > (2u8.pow(4) - 1) {
@@ -64,11 +66,13 @@ impl V1PayloadWithAttachments {
         }
 
         let i_att = !payload.is_empty();
+        let i_tid = t_id.is_some();
 
         let version = v1::get_version();
         Ok(Arc::new(Self {
-            i_att,
             version,
+            i_tid,
+            i_att,
             seg_num: 0,
             sess_id,
             k_id,
@@ -96,11 +100,13 @@ impl V1PayloadWithAttachments {
         }
 
         let i_att = !payload.is_empty();
+        let i_tid = t_id.is_some();
 
         let version = v1::get_version();
         Ok(Arc::new(Self {
-            i_att,
             version,
+            i_tid,
+            i_att,
             seg_num,
             sess_id,
             k_id,
@@ -163,9 +169,10 @@ pub fn deserialize_payload_with_attachments(
     data: &[u8]
 ) -> Result<Arc<V1PayloadWithAttachments>, V1PayloadsError> {
     let version = bit_utils::get_bits(&data[0], 0, 2);
-    let i_att = bit_utils::is_bit_on(&data[0], 3);
+    let i_tid = bit_utils::is_bit_on(&data[0], 3);
+    let i_att = bit_utils::is_bit_on(&data[0], 4);
     let sess_id = match bit_utils::bit_wrap(
-        &data[0], 4, &data[1], 3) {
+        &data[0], 5, &data[1], 3) {
         Ok(s) => s,
         Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
     };
@@ -180,12 +187,13 @@ pub fn deserialize_payload_with_attachments(
     let payload = data[9..].to_vec();
 
     Ok(Arc::new(V1PayloadWithAttachments {
-        i_att,
         version,
+        i_tid,
+        i_att,
         seg_num,
         sess_id,
         k_id,
-        t_id,
+        t_id: Option::from(t_id),
         len_att,
         payload
     }))
@@ -213,7 +221,7 @@ impl V1PayloadWithAttachmentsNoHeader {
         sess_id: u8,
         payload: Vec<u8>
     ) -> Result<Arc<Self>, V1PayloadsError> {
-        if sess_id > (2u8.pow(4) - 1) {
+        if sess_id > (2u8.pow(3) - 1) {
             return Err(SessionIdTooLarge);
         }
         Ok(Arc::new(Self {
@@ -225,7 +233,7 @@ impl V1PayloadWithAttachmentsNoHeader {
 
     pub fn deserialize(&self, data: &[u8]) -> Result<Arc<Self>, V1PayloadsError> {
         let seg_num = data[0];
-        let sess_id = data[1];
+        let sess_id = bit_utils::get_bits(&data[1], 0, 6);
         let payload = data[2..].to_vec();
 
         Ok(Arc::new(Self {
@@ -242,19 +250,23 @@ impl V1Payloads for V1PayloadWithAttachments {
     fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
-        let mut byte = bit_utils::put_value(&self.version, 4, self.sess_id, 4);
-        if self.i_att { byte = bit_utils::turn_bit_on(&byte, 3) };
+        let mut byte = bit_utils::put_value(&0, 0, self.version, 5);
+        if self.i_tid { byte = bit_utils::turn_bit_on(&byte, 3) };
+        if self.i_att { byte = bit_utils::turn_bit_on(&byte, 4) };
+        byte = bit_utils::put_value(&byte, 5, self.sess_id, 4);
         bytes.push(byte);
 
         let mut byte = bit_utils::get_bits(&self.sess_id, 4, 7);
-        byte = bit_utils::put_value(&byte, 4, self.seg_num, 4);
+        byte = bit_utils::put_value(&byte, 3, self.seg_num, 4);
         bytes.push(byte);
 
         let mut byte = bit_utils::get_bits(&self.seg_num, 4, 7);
         byte = bit_utils::put_value(&byte, 4, self.k_id, 4);
         bytes.push(byte);
 
-        bytes.extend(self.t_id.to_le_bytes());
+        if self.t_id.is_some() {
+            bytes.extend(self.t_id.unwrap().to_le_bytes());
+        }
         bytes.extend(self.len_att.to_le_bytes());
 
         if bytes.len() > SEG_0_HEADER_SIZE as usize {
@@ -316,7 +328,7 @@ fn att_true_n_serialize() {
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
     let k_id: u8 = 1;
-    let f_id: u32 = 255;
+    let f_id: Option<u32> = Option::from(255);
 
     let mut payload = email.serialize().unwrap();
     let att = rand::random::<[u8; (140*10)]>().to_vec();
@@ -352,7 +364,7 @@ fn att_true_n_serialize() {
 fn test_calculate_segments() {
     let seg_num: u8 = 1;
     let sess_num: u8 = 1;
-    let f_id: u32 = 255;
+    let f_id: Option<u32> = Option::from(255);
     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
     let mut ins = V1PayloadWithAttachments::new(
@@ -386,7 +398,7 @@ fn test_calculate_segments() {
 fn att_split() {
     let sess_num: u8 = 1;
     let k_id: u8 = 1;
-    let f_id: u32 = 255;
+    let f_id: Option<u32> = Option::from(255);
 
     // let mut payload = email.serialize().unwrap();
     // const len_att: usize = MAX_SPLIT_0_WITH_DID as usize + 1;

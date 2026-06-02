@@ -9,35 +9,41 @@ use crate::v1::payloads::V1PayloadsError::{ContentDeserializationError, ContentS
 
 #[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithoutAttachments {
-    i_att: bool,
     version: u8,
+    i_tid: bool,
+    i_att: bool,
     k_id: u8,
-    t_id: u32,
+    t_id: Option<u32>,
     payload: Vec<u8>,
 }
 
 
 #[uniffi::export]
 impl V1PayloadWithoutAttachments {
+    pub fn get_i_att(&self) -> bool { self.i_att }
+    pub fn get_i_tid(&self) -> bool { self.i_tid }
     pub fn get_version(&self) -> u8 { self.version }
     pub fn get_k_id(&self) -> u8 { self.k_id }
-    pub fn get_t_id(&self) -> u32 { self.t_id }
+    pub fn get_t_id(&self) -> Option<u32> { self.t_id }
     pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
     #[uniffi::constructor]
     pub fn new(
         k_id: u8,
-        t_id: u32,
+        t_id: Option<u32>,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
         if k_id > (2u8.pow(4) - 1) {
             return Err(KeyIdTooLarge);
         }
 
+        let i_tid = t_id.is_some();
+
         let version = v1::get_version();
         Ok(Arc::new(Self {
-            i_att: false,
             version,
+            i_tid,
+            i_att: false,
             k_id,
             t_id,
             payload,
@@ -50,17 +56,19 @@ impl V1PayloadWithoutAttachments {
 pub fn v1_deserialize_payload_without_attachments(
     data: &[u8]
 ) -> Result<Arc<V1PayloadWithoutAttachments>, V1PayloadsError> {
-    let version = bit_utils::get_bits(&data[0], 0, 6);
-    let i_att = bit_utils::is_bit_on(&data[0], 7);
+    let version = bit_utils::get_bits(&data[0], 0, 2);
+    let i_tid = bit_utils::is_bit_on(&data[0], 3);
+    let i_att = bit_utils::is_bit_on(&data[0], 4);
     let k_id = data[1];
     let t_id = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
     let payload = data[6..].to_vec();
 
     Ok(Arc::new( V1PayloadWithoutAttachments {
-        i_att,
         version,
+        i_tid,
+        i_att,
         k_id,
-        t_id,
+        t_id: Some(t_id),
         payload
     }))
 }
@@ -70,12 +78,15 @@ impl V1Payloads for V1PayloadWithoutAttachments {
     fn serialize(&self) -> crate::v1::payloads::Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
-        let mut byte1 : u8 = bit_utils::put_value(&0, 0, self.version, 1);
-        if self.i_att { byte1 = bit_utils::turn_bit_on(&byte1, 7); }
+        let mut byte1 : u8 = bit_utils::put_value(&0, 0, self.version, 5);
+        if self.i_tid { byte1 = bit_utils::turn_bit_on(&byte1, 3); }
+        if self.i_att { byte1 = bit_utils::turn_bit_on(&byte1, 4); }
         bytes.push(byte1);
 
         bytes.push(self.k_id);
-        bytes.extend(self.t_id.to_le_bytes());
+        if self.i_tid {
+            bytes.extend(self.t_id.as_ref().unwrap().to_le_bytes());
+        }
         bytes.extend(self.payload.clone());
         Ok(bytes)
     }
@@ -105,7 +116,7 @@ fn att_false_serialize() {
 
     let transport_att_false = V1PayloadWithoutAttachments::new(
         k_id,
-        t_id,
+        Some(t_id),
         payload,
     ).unwrap();
 
