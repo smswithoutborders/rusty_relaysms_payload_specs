@@ -190,8 +190,6 @@ ad = associated_data,
 nonce = nonce
 )
 */
-
-
 #[uniffi::export]
 fn v1_platform_publisher(
     ec_kid: Vec<u8>,

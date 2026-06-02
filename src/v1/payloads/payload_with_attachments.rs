@@ -18,7 +18,7 @@ pub struct V1PayloadWithAttachments {
     sess_id: u8,
     k_id: u8,
     len_att: u16,
-    t_id: u32,
+    t_id: Option<u32>,
     payload: Vec<u8>,
 }
 
@@ -37,7 +37,7 @@ impl V1PayloadWithAttachments {
     pub fn get_seg_num(&self) -> u8 { self.seg_num }
     pub fn get_sess_id(&self) -> u8 { self.sess_id }
     pub fn get_k_id(&self) -> u8 { self.k_id }
-    pub fn get_t_id(&self) -> u32 { self.t_id }
+    pub fn get_t_id(&self) -> Option<u32> { self.t_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
     pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
@@ -52,7 +52,7 @@ impl V1PayloadWithAttachments {
     pub fn new(
         sess_id: u8,
         k_id: u8,
-        t_id: u32,
+        t_id: Option<u32>,
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
@@ -84,7 +84,7 @@ impl V1PayloadWithAttachments {
         seg_num: u8,
         sess_id: u8,
         k_id: u8,
-        t_id: u32,
+        t_id: Option<u32>,
         len_att: u16,
         payload: Vec<u8>,
     ) -> Result<Arc<Self>, V1PayloadsError> {
