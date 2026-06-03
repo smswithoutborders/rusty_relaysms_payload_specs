@@ -28,5 +28,16 @@ cipher_token = v1_token_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-_ = v1_token_decrypt(...)
+token_hash = v1_token_decrypt(...)
+```
+
+### Publisher
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+ciphertext = v1_platform_publisher_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+payload = v1_platform_publisher_decrypt(...)
 ```
