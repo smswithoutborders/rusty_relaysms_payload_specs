@@ -193,18 +193,26 @@ nonce = nonce
 #[uniffi::export]
 fn v1_platform_publisher(
     ec_kid: Vec<u8>,
-    ec_kid_pk: Vec<u8>,
     ss_kid_pk: Vec<u8>,
     es_kid_pk: Vec<u8>,
-    key_id: Vec<u8>,
+    key_id: u8,
     plaintext: Vec<u8>,
 ) -> Result<Vec<u8>, V1CryptographicError> {
     let protocol = b"3DH_25519_ChaCha20-Poly1305";
     let salt = b"RelaySMS v1";
     let ds = b"RelaySMS Publishing Key v1";
 
+    let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
+    let ec_kid = StaticSecret::from(ec_kid);
+    let ec_kid_pk = PublicKey::from(&ec_kid);
+
     let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
-    let associated_data = [key_id, ec_kid_pk, es_kid_pk.clone()].concat();
+    let associated_data = [
+        key_id.to_le_bytes().as_slice().to_vec(),
+        ec_kid_pk.to_bytes().to_vec(),
+        es_kid_pk.clone()
+    ].concat();
+
     let payload = Payload {
         msg: plaintext.as_slice(),
         aad: associated_data.as_slice(),
@@ -215,11 +223,8 @@ fn v1_platform_publisher(
     let es_kid_pk: [u8; 32] = es_kid_pk.try_into().expect("es_kid_pk should be 32 bytes");
     let es_kid_pk= PublicKey::from(es_kid_pk);
 
-    let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
-    let ec_kid_secret = StaticSecret::from(ec_kid);
-
-    let dh = ec_kid_secret.diffie_hellman(&ss_kid_pk);
-    let dh1 = ec_kid_secret.diffie_hellman(&es_kid_pk);
+    let dh = ec_kid.diffie_hellman(&ss_kid_pk);
+    let dh1 = ec_kid.diffie_hellman(&es_kid_pk);
 
     let mut iter = dh.to_bytes().into_iter().chain(dh1.to_bytes());
     let con_dh_dh1: [u8; 64] = std::array::from_fn(|i| { iter.next().unwrap() });

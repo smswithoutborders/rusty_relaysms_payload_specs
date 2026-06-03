@@ -17,14 +17,13 @@ pub enum V1ContentCategories {
 }
 
 #[uniffi::export]
-pub fn v1_content_category_from_u8(value: u8) -> V1ContentCategories {
-    // TODO: put a guard here to make sure in range
+pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories, V1ContentError> {
     match value {
-        0x0 => V1ContentCategories::Email,
-        0x1 => V1ContentCategories::Message,
-        0x2 => V1ContentCategories::Text,
-        0x3 => V1ContentCategories::Bridge,
-        _ => V1ContentCategories::Email,
+        0x0 => Ok(V1ContentCategories::Email),
+        0x1 => Ok(V1ContentCategories::Message),
+        0x2 => Ok(V1ContentCategories::Text),
+        0x3 => Ok(V1ContentCategories::Bridge),
+        _ => Err(V1ContentError::InvalidCategory),
     }
 }
 
@@ -69,6 +68,9 @@ pub enum V1ContentError {
 
     #[error("Body is empty")]
     EmptyBody,
+
+    #[error("Invalid category id")]
+    InvalidCategory,
 }
 #[uniffi::export(with_foreign)]
 pub trait V1Contents: Debug + Send + Sync {

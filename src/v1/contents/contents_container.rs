@@ -29,35 +29,36 @@ impl V1ContentsContainer {
 
     pub fn instance(&self) -> Result<Arc<dyn V1Contents>, V1ContentError> {
         match v1_content_category_from_u8(self.cat_id) {
-            V1ContentCategories::Email => {
-                if !self.to.is_some() {
-                    return Err(V1ContentError::MissingTo)
+            Ok(contents) => {
+                match contents {
+                    V1ContentCategories::Email | V1ContentCategories::Bridge => {
+                        if !self.to.is_some() {
+                            return Err(V1ContentError::MissingTo)
+                        }
+                        if self.body.is_empty() {
+                            return Err(V1ContentError::EmptyBody)
+                        }
+                        let email = match V1Emails::new(
+                            self.to.as_ref().unwrap().as_str(),
+                            self.body.as_str(),
+                            self.subject.clone(),
+                        ) {
+                            Ok(email) => email,
+                            Err(e) => return Err(V1ContentError::from(e))
+                        };
+                        Ok(email)
+                    }
+                    V1ContentCategories::Message => {
+                        todo!()
+                    }
+                    V1ContentCategories::Text => {
+                        todo!()
+                    }
                 }
-                if self.body.is_empty() {
-                    return Err(V1ContentError::EmptyBody)
-                }
-                let email = match V1Emails::new(
-                    self.to.as_ref().unwrap().as_str(),
-                    self.body.as_str(),
-                    self.subject.clone(),
-                ) {
-                    Ok(email) => email,
-                    Err(e) => return Err(V1ContentError::from(e))
-                };
-                Ok(email)
-            }
-            V1ContentCategories::Message => {
-                todo!()
-            }
-            V1ContentCategories::Text => {
-                todo!()
-            }
-            V1ContentCategories::Bridge => {
-                todo!()
-            }
+            },
+            Err(e) => Err(V1ContentError::from(e))
         }
     }
-
 }
 
 
