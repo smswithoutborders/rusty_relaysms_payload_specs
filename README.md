@@ -31,6 +31,17 @@ cipher_token = v1_token_encrypt(...)
 token_hash = v1_token_decrypt(...)
 ```
 
+### OAuth URL
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+ciphertext_url = v1_oauth_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+url = v1_oauth_decrypt(...)
+```
+
 ### Publisher
 ```rust
 // Get token
