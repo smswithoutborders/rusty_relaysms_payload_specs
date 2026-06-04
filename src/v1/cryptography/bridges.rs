@@ -1,13 +1,19 @@
+use aead::Aead;
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use hkdf::Hkdf;
 use rand::RngExt;
 use x25519_dalek::{PublicKey, StaticSecret};
+use sha256::{digest, try_digest};
+use sha2::Sha256;
 use crate::v1::cryptography::{v1_publishing_decrypt, v1_publishing_encryption, V1CryptographicError};
 
-const PROTOCOL: &[u8] = b"3DH_25519_ChaCha20-Poly1305";
-const SALT: &[u8] = b"RelaySMS v1";
-const DS: &[u8] = b"RelaySMS Bridge Key v1";
+const PROTOCOL_ONLINE_FIRST: &[u8] = b"3DH_25519_ChaCha20-Poly1305";
+const SALT_ONLINE_FIRST: &[u8] = b"RelaySMS v1";
+const DS_ONLINE_FIRST: &[u8] = b"RelaySMS Bridge Key v1";
+
 
 #[uniffi::export]
-fn v1_bridge_publisher_encrypt(
+fn v1_bridge_online_first_publisher_encrypt(
     ec_kid: Vec<u8>,
     ss_kid_pk: Vec<u8>,
     es_kid_pk: Vec<u8>,
@@ -15,9 +21,9 @@ fn v1_bridge_publisher_encrypt(
     plaintext: Vec<u8>,
 ) -> Result<Vec<u8>, V1CryptographicError> {
     v1_publishing_encryption(
-        PROTOCOL,
-        SALT,
-        DS,
+        PROTOCOL_ONLINE_FIRST,
+        SALT_ONLINE_FIRST,
+        DS_ONLINE_FIRST,
         ec_kid,
         ss_kid_pk,
         es_kid_pk,
@@ -27,7 +33,7 @@ fn v1_bridge_publisher_encrypt(
 }
 
 #[uniffi::export]
-fn v1_bridge_publisher_decrypt(
+fn v1_bridge_online_first_publisher_decrypt(
     ec_kid_pk: Vec<u8>,
     es_kid_pk: Vec<u8>,
     ss_kid: Vec<u8>,
@@ -36,9 +42,9 @@ fn v1_bridge_publisher_decrypt(
     received_payload: Vec<u8>,
 ) -> Result<Vec<u8>, V1CryptographicError> {
     v1_publishing_decrypt(
-        PROTOCOL,
-        SALT,
-        DS,
+        PROTOCOL_ONLINE_FIRST,
+        SALT_ONLINE_FIRST,
+        DS_ONLINE_FIRST,
         ec_kid_pk,
         es_kid_pk,
         ss_kid,
@@ -47,6 +53,77 @@ fn v1_bridge_publisher_decrypt(
         received_payload,
     )
 }
+
+
+const PROTOCOL_OFFLINE_FIRST: &[u8] = b"Noise_IK_25519_AESGCM_SHA256";
+const INFO_OFFLINE_FIRST: &[u8] = b"RelaySMS C2S DR v1";
+
+#[derive(PartialEq, Debug, uniffi::Object)]
+pub struct OfflineFirstResponse {
+    tx_payload: Vec<u8>,
+    h: Vec<u8>,
+}
+#[uniffi::export]
+fn v1_bridge_offline_first_publisher_encrypt(
+    ss_pk: Vec<u8>,
+    ec: Vec<u8>,
+    sc: Vec<u8>,
+    payload: Vec<u8>,
+) -> Result<OfflineFirstResponse, V1CryptographicError> {
+    let mut h = digest(PROTOCOL_OFFLINE_FIRST);
+    let ck = h.clone();
+
+    h = digest([h.into_bytes().to_vec(), ss_pk.clone()].concat());
+
+    let ec: [u8; 32] = ec.try_into().expect("ec should be 32 bytes");
+    let ec = StaticSecret::from(ec);
+    let ec_pk = PublicKey::from(&ec);
+    h = digest([h.into_bytes().to_vec(), ec_pk.to_bytes().to_vec()].concat());
+
+    let ss_pk: [u8; 32] = ss_pk.try_into().expect("ss_pk should be 32 bytes");
+    let ss_pk = PublicKey::from(ss_pk);
+    let dh_es = ec.diffie_hellman(&ss_pk);
+
+    let (_, hk) = Hkdf::<Sha256>::extract(
+        Option::from(ck.as_bytes()), dh_es.to_bytes().as_slice());
+    let mut ck = [0u8; 32];
+    hk.expand(INFO_OFFLINE_FIRST, &mut ck).expect("expansion should be ok");
+    let mut k = [0u8; 32];
+    hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
+
+    let sc: [u8; 32] = sc.try_into().expect("sc should be 32 bytes");
+    let sc = StaticSecret::from(sc);
+    let sc_pk = PublicKey::from(&sc);
+
+    let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
+    let cipher = Aes256Gcm::new_from_slice(k.as_slice())
+        .expect("Aes256Gcm::new_from_slice failed");
+    let sc_pk_enc = cipher.encrypt(&nonce, sc_pk.to_bytes().as_slice())
+        .expect("encryption should be ok");
+
+    h = digest([h.into_bytes().to_vec(), sc_pk_enc.to_vec()].concat());
+    let dh_ss = sc.diffie_hellman(&ss_pk);
+
+    let (_, hk) = Hkdf::<Sha256>::extract(
+        Option::from(ck.as_slice()), dh_ss.to_bytes().as_slice());
+    let mut ck = [0u8; 32];
+    hk.expand(INFO_OFFLINE_FIRST, &mut ck).expect("expansion should be ok");
+    let mut k = [0u8; 32];
+    hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
+
+    let cipher = Aes256Gcm::new_from_slice(k.as_slice())
+        .expect("Aes256Gcm::new_from_slice failed");
+    let tx_payload = cipher.encrypt(&nonce, payload.as_slice())
+        .expect("encryption should be ok");
+
+    h = digest([h.into_bytes().to_vec(), sc_pk_enc.to_vec()].concat());
+
+    Ok(OfflineFirstResponse {
+        tx_payload,
+        h: h.into_bytes().to_vec(),
+    })
+}
+
 
 #[test]
 fn test_publisher_encryption_decryption() {
@@ -63,7 +140,7 @@ fn test_publisher_encryption_decryption() {
 
     let plaintext= b"129701738923479234023840384h3hsfhasdf7123947293472394732497";
     let key_id= 255u8;
-    let ciphertext = v1_bridge_publisher_encrypt(
+    let ciphertext = v1_bridge_online_first_publisher_encrypt(
         ec_kid.as_bytes().to_vec(),
         ss_kid_pk,
         es_kid_pk,
@@ -75,7 +152,7 @@ fn test_publisher_encryption_decryption() {
     let es_kid_pk = PublicKey::from(&es_kid).as_bytes().to_vec();
     let ss_kid = ss_kid.as_bytes().to_vec();
     let es_kid = es_kid.as_bytes().to_vec();
-    let decrypted = v1_bridge_publisher_decrypt(
+    let decrypted = v1_bridge_online_first_publisher_decrypt(
         ec_kid_pk,
         es_kid_pk,
         ss_kid,
