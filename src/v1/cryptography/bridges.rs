@@ -67,7 +67,7 @@ pub struct OfflineFirstEncryptionResponse {
 
 #[derive(PartialEq, Debug, uniffi::Object)]
 pub struct OfflineFirstDecryptionResponse {
-    tx_payload: Vec<u8>,
+    payload: Vec<u8>,
     h: Vec<u8>,
 }
 
@@ -217,7 +217,7 @@ fn v1_bridge_offline_first_publisher_decrypt(
     let payload = cipher.decrypt(&nonce, aad)
         .expect("decryption should be ok");
     Ok(OfflineFirstDecryptionResponse {
-        tx_payload: payload,
+        payload,
         h: h.into_bytes().to_vec(),
     })
 }
@@ -291,5 +291,5 @@ fn test_bridge_offline_first_publisher_encrypt_decrypt() {
         ciphertext.tx_payload
     ).unwrap();
 
-    assert_eq!(plaintext.to_vec(), decrypted.tx_payload);
+    assert_eq!(plaintext.to_vec(), decrypted.payload);
 }
