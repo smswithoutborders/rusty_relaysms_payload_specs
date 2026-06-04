@@ -61,5 +61,25 @@ ciphertext = v1_bridge_online_first_publisher_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-payload = v1_bridge_online_first_publisher_decrypt(...)
+request = v1_bridge_online_first_publisher_decrypt(...)
+```
+
+### Bridge publisher (offline first)
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+// Returns OfflineFirstEncryptionResponse {
+//   tx_payload: bytes, // encrypted payload
+//   sc_pk_enc: bytes, // encrypted long term identity key
+//   h: bytes //MixHash value
+// }
+ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+// Returns OfflineFirstDecryptionResponse {
+//   payload: bytes, // decrypted payload
+//   h: bytes //MixHash value
+// }
+response = v1_bridge_offline_first_publisher_decrypt(...)
 ```
