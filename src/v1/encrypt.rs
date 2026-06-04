@@ -81,6 +81,71 @@ token = AEAD_ENCRYPT(input = request_string, key = aes_key, ad = associated_data
 
 
 #[uniffi::export]
+fn v1_oauth_encrypt(
+    ec_kid_pk: Vec<u8>,
+    ss_kid: Vec<u8>,
+    es_kid: Vec<u8>,
+    url: Vec<u8>,
+) -> Result<Vec<u8>, V1CryptographicError> {
+    let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
+
+    let ec_kid_pk: [u8; 32] = ec_kid_pk.try_into().expect("ec_kid_pk should be 32 bytes");
+    let ec_kid_pk = PublicKey::from(ec_kid_pk);
+
+    let ss_kid: [u8; 32] = ss_kid.try_into().expect("ss_kid should be 32 bytes");
+    let ss_kid = StaticSecret::from(ss_kid);
+
+    let es_kid: [u8; 32] = es_kid.try_into().expect("es_kid should be 32 bytes");
+    let es_kid = StaticSecret::from(es_kid);
+    let es_kid_pk = PublicKey::from(&es_kid);
+
+    let associated_data = [
+        ec_kid_pk.to_bytes().to_vec(),
+        es_kid_pk.to_bytes().to_vec(),
+    ].concat();
+
+    let payload = Payload {
+        msg: url.as_slice(),
+        aad: associated_data.as_slice(),
+    };
+
+    let dh = ss_kid.diffie_hellman(&ec_kid_pk);
+    let dh1 = es_kid.diffie_hellman(&ec_kid_pk);
+
+    let aes_key = token_key_derivation(dh, dh1);
+    let cipher = Aes256Gcm::new_from_slice(&aes_key)
+        .expect("Aes256Gcm::new_from_slice failed");
+    match cipher.encrypt(&nonce, payload) {
+        Ok(ciphertext) => Ok(ciphertext.to_vec()),
+        Err(e) => Err(V1CryptographicError::FailedToEncrypt {
+            err: e.to_string(),
+        })
+    }
+}
+
+fn v1_oauth_decrypt(
+    ec_kid: Vec<u8>,
+    ss_kid_pk: Vec<u8>,
+    es_kid_pk: Vec<u8>,
+    ciphertext: Vec<u8>,
+) -> Result<Vec<u8>, V1CryptographicError> {
+    let ss_kid_pk: [u8; 32] = ss_kid_pk.try_into().expect("ss_kid_pk should be 32 bytes");
+    let ss_kid_pk = PublicKey::from(ss_kid_pk);
+
+    let es_kid_pk: [u8; 32] = es_kid_pk.try_into().expect("es_kid_pk should be 32 bytes");
+    let es_kid_pk = PublicKey::from(es_kid_pk);
+
+    let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
+    let ec_kid = StaticSecret::from(ec_kid);
+
+    let dh = ec_kid.diffie_hellman(&ss_kid_pk);
+    let dh1 = ec_kid.diffie_hellman(&es_kid_pk);
+
+    let aes_key = token_key_derivation(dh, dh1);
+}
+
+
+#[uniffi::export]
 fn v1_token_encrypt(
     ec_kid: Vec<u8>,
     ss_kid_pk: Vec<u8>,
