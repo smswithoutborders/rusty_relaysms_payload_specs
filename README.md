@@ -24,42 +24,62 @@ make kotlin
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-cipher_token = v1_token_encrypt(...)
+let cipher_token = v1_token_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-token_hash = v1_token_decrypt(...)
+let token_hash = v1_token_decrypt(...)
 ```
 
 ### OAuth URL
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-ciphertext_url = v1_oauth_encrypt(...)
+let ciphertext_url = v1_oauth_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-url = v1_oauth_decrypt(...)
+let url = v1_oauth_decrypt(...)
 ```
 
 ### Platform publisher
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-ciphertext = v1_platform_publisher_encrypt(...)
+let ciphertext = v1_platform_publisher_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-payload = v1_platform_publisher_decrypt(...)
+let payload = v1_platform_publisher_decrypt(...)
 ```
 
 ### Bridge publisher (online first)
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-ciphertext = v1_bridge_online_first_publisher_encrypt(...)
+let ciphertext = v1_bridge_online_first_publisher_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-payload = v1_bridge_online_first_publisher_decrypt(...)
+let request = v1_bridge_online_first_publisher_decrypt(...)
+```
+
+### Bridge publisher (offline first)
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+// Returns OfflineFirstEncryptionResponse {
+//   tx_payload: bytes, // encrypted payload
+//   sc_pk_enc: bytes, // encrypted long term identity key
+//   h: bytes //MixHash value
+// }
+let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+// Returns OfflineFirstDecryptionResponse {
+//   payload: bytes, // decrypted payload
+//   h: bytes //MixHash value
+// }
+let response = v1_bridge_offline_first_publisher_decrypt(...)
 ```
