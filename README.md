@@ -42,7 +42,7 @@ ciphertext_url = v1_oauth_encrypt(...)
 url = v1_oauth_decrypt(...)
 ```
 
-### Publisher
+### Platform publisher
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
@@ -51,4 +51,15 @@ ciphertext = v1_platform_publisher_encrypt(...)
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
 payload = v1_platform_publisher_decrypt(...)
+```
+
+### Bridge publisher (online first)
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+ciphertext = v1_bridge_publisher_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+payload = v1_bridge_publisher_decrypt(...)
 ```
