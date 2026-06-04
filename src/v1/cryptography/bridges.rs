@@ -65,10 +65,25 @@ pub struct OfflineFirstEncryptionResponse {
     h: Vec<u8>,
 }
 
+
+#[uniffi::export]
+impl OfflineFirstEncryptionResponse {
+    pub fn get_tx_payload(&self) -> Vec<u8> { self.tx_payload.clone() }
+    pub fn get_sc_pk_enc(&self) -> Vec<u8> { self.sc_pk_enc.clone() }
+    pub fn get_h(&self) -> Vec<u8> { self.h.clone() }
+}
+
 #[derive(PartialEq, Debug, uniffi::Object)]
 pub struct OfflineFirstDecryptionResponse {
     payload: Vec<u8>,
     h: Vec<u8>,
+}
+
+
+#[uniffi::export]
+impl OfflineFirstDecryptionResponse {
+    pub fn get_payload(&self) -> Vec<u8> { self.payload.clone() }
+    pub fn get_h(&self) -> Vec<u8> { self.h.clone() }
 }
 
 #[uniffi::export]
