@@ -57,9 +57,9 @@ payload = v1_platform_publisher_decrypt(...)
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-ciphertext = v1_bridge_publisher_encrypt(...)
+ciphertext = v1_bridge_online_first_publisher_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-payload = v1_bridge_publisher_decrypt(...)
+payload = v1_bridge_online_first_publisher_decrypt(...)
 ```
