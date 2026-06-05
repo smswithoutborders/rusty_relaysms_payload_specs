@@ -316,13 +316,13 @@ impl V1Payloads for V1PayloadWithAttachmentsNoHeader {
 
 #[test]
 fn att_true_n_serialize() {
-    let to  = "example@gmail.com"; //2
-    let body = "Here is some heavy Lorem Ipsum shit"; //4
-    let subject = "More things"; //7
+    let to  = b"example@gmail.com"; //2
+    let body = b"Here is some heavy Lorem Ipsum shit"; //4
+    let subject = b"More things"; //7
     let email = V1Emails::new(
-        to,
-        body,
-        Option::from(subject.to_string()),
+        to.to_vec(),
+        body.to_vec(),
+        Option::from(subject.to_vec()),
     ).unwrap();
 
     let seg_num: u8 = 1;

@@ -1,13 +1,15 @@
 use std::sync::Arc;
 use crate::v1::contents::{V1ContentError, V1ContentCategories, v1_content_category_from_u8, V1Contents};
 use crate::v1::contents::email::V1Emails;
+use crate::v1::contents::message::V1Messages;
+use crate::v1::contents::text::V1Text;
 
 #[derive(PartialEq, Debug, uniffi::Object)]
 pub struct V1ContentsContainer {
     cat_id: u8,
-    body: String,
-    to: Option<String>,
-    subject: Option<String>,
+    body: Vec<u8>,
+    to: Option<Vec<u8>>,
+    subject: Option<Vec<u8>>,
 }
 
 #[uniffi::export]
@@ -15,9 +17,9 @@ impl V1ContentsContainer {
     #[uniffi::constructor]
     pub fn new(
         cat_id: V1ContentCategories,
-        body: String,
-        to: Option<String>,
-        subject: Option<String>,
+        body: Vec<u8>,
+        to: Option<Vec<u8>>,
+        subject: Option<Vec<u8>>,
     ) -> Self {
         Self {
             cat_id: cat_id.raw_values(),
@@ -39,8 +41,8 @@ impl V1ContentsContainer {
                             return Err(V1ContentError::EmptyBody)
                         }
                         let email = match V1Emails::new(
-                            self.to.as_ref().unwrap().as_str(),
-                            self.body.as_str(),
+                            self.to.clone().unwrap(),
+                            self.body.clone(),
                             self.subject.clone(),
                         ) {
                             Ok(email) => email,
@@ -49,10 +51,23 @@ impl V1ContentsContainer {
                         Ok(email)
                     }
                     V1ContentCategories::Message => {
-                        todo!()
+                        let message = match V1Messages::new(
+                            self.to.clone().unwrap(),
+                            self.body.clone(),
+                        ) {
+                            Ok(message) => message,
+                            Err(e) => return Err(V1ContentError::from(e))
+                        };
+                        Ok(message)
                     }
                     V1ContentCategories::Text => {
-                        todo!()
+                        let text = match V1Text::new(
+                            self.body.clone(),
+                        ) {
+                            Ok(text) => text,
+                            Err(e) => return Err(V1ContentError::from(e))
+                        };
+                        Ok(text)
                     }
                 }
             },

@@ -6,6 +6,10 @@ use crate::v1::contents::email::{v1_deserialize_email_content};
 
 pub mod email;
 pub mod contents_container;
+mod message;
+mod text;
+
+type Result<T> = std::result::Result<T, V1ContentError>;
 
 #[derive(uniffi::Enum)]
 #[repr(u8)]
@@ -17,7 +21,7 @@ pub enum V1ContentCategories {
 }
 
 #[uniffi::export]
-pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories, V1ContentError> {
+pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories> {
     match value {
         0x0 => Ok(V1ContentCategories::Email),
         0x1 => Ok(V1ContentCategories::Message),
@@ -74,7 +78,7 @@ pub enum V1ContentError {
 }
 #[uniffi::export(with_foreign)]
 pub trait V1Contents: Debug + Send + Sync {
-    fn serialize(&self) -> Result<Vec<u8>, V1ContentError>;
+    fn serialize(&self) -> Result<Vec<u8>>;
     fn get_cat_id(&self) -> u8;
     fn equals(&self, other: Arc<dyn V1Contents>) -> bool;
 }
