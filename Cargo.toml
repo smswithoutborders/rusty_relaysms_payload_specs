@@ -21,6 +21,7 @@ aead = "0.6.0-rc.10"
 chacha20poly1305 = "0.11.0-rc.3"
 sha256 = "1.6.0"
 digest = "0.10.7"
+base64 = "0.22"
 
 [build-dependencies]
 uniffi = { version = "0.31.1", features = [ "build" ] }

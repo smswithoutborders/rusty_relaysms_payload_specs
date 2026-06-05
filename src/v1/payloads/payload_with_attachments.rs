@@ -8,7 +8,8 @@ use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, PayloadTooLarge, Sessi
 
 const SEG_0_HEADER_SIZE: u8 = 9;
 const SEG_N_HEADER_SIZE: u8 = 2;
-const MAX_PAYLOAD_SIZE: u8 = 138;
+const MAX_PAYLOAD_SIZE: u8 = 104; // save space in case encoding required
+// const MAX_PAYLOAD_SIZE: u8 = 138;
 
 #[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithAttachments {
@@ -277,7 +278,6 @@ impl V1Payloads for V1PayloadWithAttachments {
         }
 
         bytes.extend(self.payload.clone());
-
         Ok(bytes)
     }
 
@@ -417,8 +417,8 @@ fn att_split() {
     let expected = payload_with_attachment.calculate_segments();
     assert_eq!(expected, split.len() as u32);
     let mut serialized = split[0].serialize().unwrap();
-    assert_eq!(138, serialized.len());
+    assert_eq!(104, serialized.len());
 
     serialized = split[1].serialize().unwrap();
-    assert_eq!(138, serialized.len());
+    assert_eq!(104, serialized.len());
 }
