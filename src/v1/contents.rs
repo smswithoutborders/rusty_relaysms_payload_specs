@@ -2,7 +2,6 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 use crate::AsAny;
-use crate::v1::contents::email::{v1_deserialize_email_content};
 
 pub mod email;
 pub mod contents_container;
@@ -11,7 +10,7 @@ mod text;
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug, PartialEq)]
 #[repr(u8)]
 pub enum V1ContentCategories {
     Email = 0x0,
@@ -76,9 +75,9 @@ pub enum V1ContentError {
     #[error("Invalid category id")]
     InvalidCategory,
 }
+
 #[uniffi::export(with_foreign)]
 pub trait V1Contents: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
-    fn get_cat_id(&self) -> u8;
     fn equals(&self, other: Arc<dyn V1Contents>) -> bool;
 }

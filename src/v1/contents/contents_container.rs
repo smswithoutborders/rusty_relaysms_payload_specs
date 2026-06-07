@@ -4,12 +4,15 @@ use crate::v1::contents::email::V1Emails;
 use crate::v1::contents::message::V1Messages;
 use crate::v1::contents::text::V1Text;
 
+type Result<T> = std::result::Result<T, V1ContentError>;
+
 #[derive(PartialEq, Debug, uniffi::Object)]
 pub struct V1ContentsContainer {
-    cat_id: u8,
+    cat_id: V1ContentCategories,
     body: Vec<u8>,
     to: Option<Vec<u8>>,
     subject: Option<Vec<u8>>,
+    attachment: Option<Vec<u8>>,
 }
 
 #[uniffi::export]
@@ -20,73 +23,46 @@ impl V1ContentsContainer {
         body: Vec<u8>,
         to: Option<Vec<u8>>,
         subject: Option<Vec<u8>>,
+        attachment: Option<Vec<u8>>,
     ) -> Self {
         Self {
-            cat_id: cat_id.raw_values(),
+            cat_id,
             body,
             to,
-            subject
+            subject,
+            attachment,
         }
     }
 
-    pub fn instance(&self) -> Result<Arc<dyn V1Contents>, V1ContentError> {
-        match v1_content_category_from_u8(self.cat_id) {
-            Ok(contents) => {
-                match contents {
-                    V1ContentCategories::Email | V1ContentCategories::Bridge => {
-                        if !self.to.is_some() {
-                            return Err(V1ContentError::MissingTo)
-                        }
-                        if self.body.is_empty() {
-                            return Err(V1ContentError::EmptyBody)
-                        }
-                        let email = match V1Emails::new(
-                            self.to.clone().unwrap(),
-                            self.body.clone(),
-                            self.subject.clone(),
-                        ) {
-                            Ok(email) => email,
-                            Err(e) => return Err(V1ContentError::from(e))
-                        };
-                        Ok(email)
-                    }
-                    V1ContentCategories::Message => {
-                        let message = match V1Messages::new(
-                            self.to.clone().unwrap(),
-                            self.body.clone(),
-                        ) {
-                            Ok(message) => message,
-                            Err(e) => return Err(V1ContentError::from(e))
-                        };
-                        Ok(message)
-                    }
-                    V1ContentCategories::Text => {
-                        let text = match V1Text::new(
-                            self.body.clone(),
-                        ) {
-                            Ok(text) => text,
-                            Err(e) => return Err(V1ContentError::from(e))
-                        };
-                        Ok(text)
-                    }
-                }
-            },
-            Err(e) => Err(V1ContentError::from(e))
+    #[uniffi::constructor]
+    pub fn deserialize(
+        data: &[u8],
+        cat_id: V1ContentCategories,
+        len_att: u16
+    ) -> Result<V1ContentsContainer> {
+        match cat_id {
+            V1ContentCategories::Email => {
+                let email = match V1Emails::deserialize(data, len_att) {
+                    Ok(email) => email,
+                    Err(e) => return Err(e)
+                };
+                Ok( V1ContentsContainer {
+                    cat_id,
+                    body: email.get_body(),
+                    to: Some(email.get_to()),
+                    subject: email.get_subject(),
+                    attachment: email.get_attachment()
+                })
+            }
+            V1ContentCategories::Message => {
+                todo!()
+            }
+            V1ContentCategories::Text => {
+                todo!()
+            }
+            V1ContentCategories::Bridge => {
+                todo!()
+            }
         }
-    }
-}
-
-
-impl V1Contents for V1ContentsContainer {
-    fn serialize(&self) -> Result<Vec<u8>, V1ContentError> {
-        todo!()
-    }
-
-    fn get_cat_id(&self) -> u8 {
-        todo!()
-    }
-
-    fn equals(&self, other: Arc<dyn V1Contents>) -> bool {
-        todo!()
     }
 }
