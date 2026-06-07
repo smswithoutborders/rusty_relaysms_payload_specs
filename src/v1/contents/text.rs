@@ -4,7 +4,7 @@ use crate::v1::contents::{V1ContentError, V1Contents};
 use crate::v1::contents::message::{V1Messages};
 
 type Result<T> = std::result::Result<T, V1ContentError>;
-#[derive(PartialEq, Debug, uniffi::Object)]
+#[derive(PartialEq, Debug, Clone, uniffi::Object)]
 pub struct V1Text {
     body: Vec<u8>,
     attachment: Option<Vec<u8>>,
@@ -28,7 +28,7 @@ impl V1Text {
     }
 
     #[uniffi::constructor]
-    pub fn deserialize(data: Vec<u8>, len_att: u16) -> Result<Arc<V1Text>> {
+    pub fn deserialize(data: &[u8], len_att: u16) -> Result<Arc<V1Text>> {
         let body = data[..(data.len() - len_att as usize)].to_vec();
         let attachment = if len_att > 0 {
             Some(data[(data.len() - len_att as usize)..].to_vec())
@@ -60,7 +60,7 @@ fn test_text_init() {
     ).unwrap();
 
     let serialized = text.serialize().unwrap();
-    let deserialized = V1Text::deserialize(serialized, 0).unwrap();
+    let deserialized = V1Text::deserialize(serialized.as_slice(), 0).unwrap();
     assert_eq!(text, deserialized);
 
     const LEN_ATT: u16 = 140 * 50;
@@ -71,7 +71,7 @@ fn test_text_init() {
     ).unwrap();
 
     let serialized = text.serialize().unwrap();
-    let deserialized = V1Text::deserialize(serialized, LEN_ATT).unwrap();
+    let deserialized = V1Text::deserialize(serialized.as_slice(), LEN_ATT).unwrap();
 
     assert_eq!(text, deserialized);
 }

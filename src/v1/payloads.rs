@@ -1,10 +1,12 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
-use crate::{bit_utils, utils};
+use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
 use crate::v1::contents::email::V1Emails;
-use crate::v1::contents::{V1ContentCategories, V1ContentError, V1ContentsContainer};
+use crate::v1::contents::{V1ContentCategories, V1ContentError, V1Contents, V1ContentsContainer};
+use crate::v1::contents::message::V1Messages;
+use crate::v1::contents::text::V1Text;
 use crate::v1::get_version;
 use crate::v1::payloads::payload_with_attachments::{V1PayloadWithAttachmentsHeader, V1PayloadWithAttachmentsNoHeader, ATTACHMENT_SEG_N_HEADER_SIZE, ATTACHMENT_SEG_O_HEADER_SIZE};
 use crate::v1::payloads::V1PayloadsError::PayloadTooLarge;
@@ -57,10 +59,11 @@ pub enum V1PayloadsError {
     #[error("Missing payload")]
     MissingPayload,
 
-    #[error("Payload too large; wanted {max} got {current}")]
+    #[error("Payload ({seg_num}) too large; wanted {max} got {current}")]
     PayloadTooLarge {
         current: i32,
         max: u8,
+        seg_num: u8,
     },
 
     #[error("Header too large; wanted {max} got {current}")]
@@ -90,21 +93,35 @@ pub enum V1PayloadsError {
     ErrorFromContent {
         error: V1ContentError,
     },
+
+    #[error("Error downcasting content")]
+    ErrorDowncastingContent,
 }
 
-#[derive(PartialEq, Debug, uniffi::Object)]
+#[derive(Debug, uniffi::Object)]
 pub struct V1Payloads {
-    payload: Arc<V1ContentsContainer>,
+    payload: Arc<dyn V1Contents>,
     k_id: u8,
     len_att: u16,
     t_id: Option<u32>,
     sess_id: Option<u8>,
 }
 
+impl PartialEq for V1Payloads {
+    fn eq(&self, other: &Self) -> bool {
+        self.payload.serialize().unwrap_or_default() ==
+            other.payload.serialize().unwrap_or_default() &&
+            self.k_id == other.k_id &&
+            self.len_att == other.len_att &&
+            self.t_id == other.t_id &&
+            self.sess_id == other.sess_id
+    }
+}
+
 
 #[uniffi::export]
 impl V1Payloads {
-    pub fn get_payload(&self) -> Arc<V1ContentsContainer> { self.payload.clone() }
+    pub fn get_payload(&self) -> Arc<dyn V1Contents> { self.payload.clone() }
     pub fn get_kid(&self) -> u8 { self.k_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
     pub fn get_t_id(&self) -> Option<u32> { self.t_id }
@@ -113,7 +130,7 @@ impl V1Payloads {
 
     #[uniffi::constructor]
     pub fn new(
-        payload: Arc<V1ContentsContainer>,
+        payload: Arc<dyn V1Contents>,
         k_id: u8,
         len_att: u16,
         t_id: Option<u32>,
@@ -132,7 +149,7 @@ impl V1Payloads {
     pub fn join(
         payload: Vec<Vec<u8>>,
         cat_id: V1ContentCategories,
-    ) -> Result<V1ContentsContainer> {
+    ) -> Result<V1ContentCategories> {
         let seg_0 =
             match V1PayloadWithAttachmentsHeader::deserialize(&payload[0]) {
                 Ok(T) => T,
@@ -170,18 +187,24 @@ impl V1Payloads {
     pub fn split(
         &self,
         transport: Arc<dyn Transports>,
-        cat_id: V1ContentCategories
     ) -> Result<Vec<Vec<u8>>> {
         let max_transport_payload_size = transport.get_max_payload_size();
         let max_payload_size: u8 = u8::try_from(max_transport_payload_size).unwrap_or(u8::MAX);
         let max_value = max_payload_size - ATTACHMENT_SEG_O_HEADER_SIZE;
 
-        let payload = match self.payload.serialize(cat_id) {
+        let payload = match self.payload.clone().serialize() {
             Ok(T) => T,
             Err(e) => return Err(V1PayloadsError::ContentSerializationError)
         };
         let items = utils::take_n_from(&payload, 0, max_value as usize);
         let mut start_index: usize = items.len();
+        if items.len() as u8 > max_value {
+            return Err(PayloadTooLarge {
+                current: items.len() as i32,
+                max: max_value,
+                seg_num: 0
+            })
+        }
 
         let payload_seg_0 = match V1PayloadWithAttachmentsHeader::new(
             self.sess_id.unwrap(),
@@ -194,12 +217,7 @@ impl V1Payloads {
             Err(e) => { return Err(V1PayloadsError::from(e)); }
         };
         let seg_0 = payload_seg_0.serialize().expect("seg 0 should be serializable");
-        if seg_0.len() as u32 > (max_payload_size - ATTACHMENT_SEG_O_HEADER_SIZE) as u32 {
-            return Err(PayloadTooLarge {
-                current: seg_0.len() as i32,
-                max: max_payload_size,
-            })
-        }
+
         let mut payloads: Vec<Vec<u8>> = Vec::new();
         payloads.push(seg_0);
 
@@ -207,6 +225,13 @@ impl V1Payloads {
         let max_value = max_payload_size - ATTACHMENT_SEG_N_HEADER_SIZE;
         while start_index < payload.len() {
             let items = utils::take_n_from(&payload, start_index, max_value as usize);
+            if items.len() as u8 > max_value {
+                return Err(PayloadTooLarge {
+                    current: items.len() as i32,
+                    max: max_payload_size,
+                    seg_num
+                })
+            }
             start_index += items.len();
 
             let payload_seg_n =
@@ -220,12 +245,6 @@ impl V1Payloads {
                     Err(e) => { return Err(V1PayloadsError::from(e)); }
                 };
             let seg_n = payload_seg_n.serialize().expect("seg n should be serializable");
-            if seg_n.len() as u32 > (max_payload_size - ATTACHMENT_SEG_N_HEADER_SIZE) as u32 {
-                return Err(PayloadTooLarge {
-                    current: seg_n.len() as i32,
-                    max: max_payload_size,
-                })
-            }
             payloads.push(seg_n);
             seg_num += 1;
         }

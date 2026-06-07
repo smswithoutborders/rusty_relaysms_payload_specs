@@ -5,7 +5,7 @@ use crate::v1::contents::email::{V1Emails};
 use crate::v1::contents::{V1ContentError, V1Contents};
 
 type Result<T> = std::result::Result<T, V1ContentError>;
-#[derive(PartialEq, Debug, uniffi::Object)]
+#[derive(PartialEq, Debug, Clone, uniffi::Object)]
 pub struct V1Messages {
     len_to: u8,
     to: Vec<u8>,

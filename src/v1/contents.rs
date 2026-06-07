@@ -3,10 +3,12 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use crate::AsAny;
 use crate::v1::contents::email::V1Emails;
+use crate::v1::contents::message::V1Messages;
+use crate::v1::contents::text::V1Text;
 
 pub mod email;
-mod message;
-mod text;
+pub mod message;
+pub mod text;
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 
@@ -17,6 +19,10 @@ pub enum V1ContentCategories {
     Message = 0x1,
     Text = 0x2,
     Bridge = 0x3,
+
+    EMAIL { value: Arc<V1Emails> },
+    MESSAGE { value: Arc<V1Messages> },
+    TEXT { value: Arc<V1Text> },
 }
 
 #[uniffi::export]
@@ -30,18 +36,6 @@ pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories> {
     }
 }
 
-
-#[uniffi::export]
-impl V1ContentCategories {
-    pub fn raw_values(&self) -> u8 {
-        match self {
-            V1ContentCategories::Email => 0x0,
-            V1ContentCategories::Message => 0x1,
-            V1ContentCategories::Text => 0x2,
-            V1ContentCategories::Bridge => 0x3,
-        }
-    }
-}
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum V1ContentError {
@@ -78,7 +72,7 @@ pub enum V1ContentError {
 
 
 #[uniffi::export(with_foreign)]
-trait V1Contents: Debug + Send + Sync {
+pub trait V1Contents: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
 }
 
@@ -115,28 +109,30 @@ impl V1ContentsContainer {
         data: &[u8],
         cat_id: V1ContentCategories,
         len_att: u16
-    ) -> Result<V1ContentsContainer> {
+    ) -> Result<V1ContentCategories> {
         match cat_id {
-            V1ContentCategories::Email => {
+            V1ContentCategories::Email | V1ContentCategories::Bridge => {
                 let email = match V1Emails::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentsContainer {
-                    cat_id,
-                    body: email.get_body(),
-                    to: Some(email.get_to()),
-                    subject: email.get_subject(),
-                    attachment: email.get_attachment()
-                })
+                Ok(V1ContentCategories::EMAIL { value: email })
             }
             V1ContentCategories::Message => {
-                todo!()
+                let message = match V1Messages::deserialize(data, len_att) {
+                    Ok(email) => email,
+                    Err(e) => return Err(e)
+                };
+                Ok(V1ContentCategories::MESSAGE { value: message })
             }
             V1ContentCategories::Text => {
-                todo!()
+                let text = match V1Text::deserialize(data, len_att) {
+                    Ok(email) => email,
+                    Err(e) => return Err(e)
+                };
+                Ok(V1ContentCategories::TEXT { value: text })
             }
-            V1ContentCategories::Bridge => {
+            _ => {
                 todo!()
             }
         }
@@ -147,7 +143,7 @@ impl V1ContentsContainer {
         cat_id: V1ContentCategories,
     ) -> Result<Vec<u8>> {
         match cat_id {
-            V1ContentCategories::Email => {
+            V1ContentCategories::Email | V1ContentCategories::Bridge => {
                 let email = match V1Emails::new(
                     self.to.clone().unwrap(),
                     self.body.clone(),
@@ -160,12 +156,27 @@ impl V1ContentsContainer {
                 email.serialize()
             }
             V1ContentCategories::Message => {
-                todo!()
+                let message = match V1Messages::new(
+                    self.to.clone().unwrap(),
+                    self.body.clone(),
+                    self.attachment.clone(),
+                ) {
+                    Ok(message) => message,
+                    Err(e) => return Err(e)
+                };
+                message.serialize()
             }
             V1ContentCategories::Text => {
-                todo!()
+                let text = match V1Text::new(
+                    self.body.clone(),
+                    self.attachment.clone(),
+                ) {
+                    Ok(text) => text,
+                    Err(e) => return Err(e)
+                };
+                text.serialize()
             }
-            V1ContentCategories::Bridge => {
+            _ => {
                 todo!()
             }
         }
