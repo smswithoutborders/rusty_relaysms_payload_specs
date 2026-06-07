@@ -73,20 +73,11 @@ impl V1Emails {
         } else { None };
 
         let body = data[current_index..(data.len() - len_att as usize)].to_vec();
-        let start_index = data.len().saturating_sub(len_att as usize);
-        let attachment: Option<Vec<u8>> = if start_index > 0 {
-            Some(data[start_index..].to_vec())
+        let attachment = if len_att > 0 {
+            Some(data[(data.len() - len_att as usize)..].to_vec())
         } else { None };
 
-        Ok(Arc::new(V1Emails {
-            i_sub,
-            len_subject,
-            len_to,
-            to,
-            body,
-            subject,
-            attachment,
-        }))
+        V1Emails::new(to, body, subject, attachment)
     }
 
 }
@@ -128,19 +119,21 @@ fn test_email_init() {
         None
     ).unwrap();
 
-    // // let serialized = email.serialize().unwrap();
-    // // let deserialized = V1Emails::deserialize(serialized.to_vec(), 0).unwrap();
-    // //
-    // assert_eq!(email, deserialized);
-    // assert_eq!((2 + to.len() + body.len() + subject.len()), serialized.len());
-    // let email1 = init_email(
-    //     to,
-    //     body,
-    //     None,
-    //     &from_id
-    // ).unwrap();
-    //
-    // let serialized = email1.serialize().unwrap();
-    // let deserialized = deserialize_email(serialized.as_slice()).unwrap();
-    // assert_eq!(email1, deserialized);
+    let serialized = email.serialize().unwrap();
+    let deserialized = V1Emails::deserialize(serialized.as_slice(), 0).unwrap();
+    assert_eq!(email, deserialized);
+
+    const LEN_ATT: u16 = 140 * 50;
+    let attachment = rand::random::<[u8; LEN_ATT as usize]>().to_vec();
+
+    let email = V1Emails::new(
+        to.to_vec(),
+        body.to_vec(),
+        Option::from(subject.to_vec()),
+        Some(attachment)
+    ).unwrap();
+
+    let serialized = email.serialize().unwrap();
+    let deserialized = V1Emails::deserialize(serialized.as_slice(), LEN_ATT).unwrap();
+    assert_eq!(email, deserialized);
 }
