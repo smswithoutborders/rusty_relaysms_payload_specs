@@ -2,11 +2,11 @@ use std::any::Any;
 use std::sync::Arc;
 use std::thread::current;
 use crate::{bit_utils, AsAny};
-use crate::v1::contents::{V1Contents, V1ContentError};
+use crate::v1::contents::{V1ContentError, V1Contents};
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 
-#[derive(PartialEq, Debug, uniffi::Object)]
+#[derive(PartialEq, Debug)]
 pub struct V1Emails {
     i_sub: bool,
     len_subject: u8,
@@ -17,8 +17,6 @@ pub struct V1Emails {
     attachment: Option<Vec<u8>>,
 }
 
-
-#[uniffi::export]
 impl V1Emails {
     pub fn get_i_sub(&self) -> bool { self.i_sub }
     pub fn get_len_subject(&self) -> u8 { self.len_subject }
@@ -28,7 +26,6 @@ impl V1Emails {
     pub fn get_subject(&self) -> Option<Vec<u8>> { self.subject.clone() }
     pub fn get_attachment(&self) -> Option<Vec<u8>> { self.attachment.clone() }
 
-    #[uniffi::constructor]
     pub fn new(
         to: Vec<u8>,
         body: Vec<u8>,
@@ -60,7 +57,6 @@ impl V1Emails {
     }
 
 
-    #[uniffi::constructor]
     pub fn deserialize(data: &[u8], len_att: u16) -> Result<Arc<V1Emails>> {
         let i_sub = bit_utils::is_bit_on(&data[0], 0);
         let len_subject = bit_utils::get_bits(&data[0], 1, 7);
@@ -95,7 +91,6 @@ impl V1Emails {
 
 }
 
-#[uniffi::export]
 impl V1Contents for V1Emails {
     fn serialize(&self) -> std::result::Result<Vec<u8>, V1ContentError> {
         let mut bytes: Vec<u8> = Vec::new(); // TODO: put size here
@@ -119,16 +114,7 @@ impl V1Contents for V1Emails {
         }
         Ok(bytes)
     }
-
-    fn equals(&self, other: Arc<dyn V1Contents>) -> bool {
-        match (self.serialize(), other.serialize()) {
-            (Ok(a), Ok(b)) => a == b,
-            _ => false,
-        }
-    }
 }
-
-
 
 #[test]
 fn test_email_init() {

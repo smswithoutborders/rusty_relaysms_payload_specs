@@ -105,7 +105,6 @@ fn v1_publishing_encryption(
     }
 }
 
-#[uniffi::export]
 fn v1_publishing_decrypt(
     protocol: &[u8],
     salt: &[u8],

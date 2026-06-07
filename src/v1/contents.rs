@@ -2,9 +2,9 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 use crate::AsAny;
+use crate::v1::contents::email::V1Emails;
 
 pub mod email;
-pub mod contents_container;
 mod message;
 mod text;
 
@@ -76,8 +76,98 @@ pub enum V1ContentError {
     InvalidCategory,
 }
 
+
 #[uniffi::export(with_foreign)]
-pub trait V1Contents: Debug + Send + Sync {
+trait V1Contents: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
-    fn equals(&self, other: Arc<dyn V1Contents>) -> bool;
+}
+
+#[derive(PartialEq, Debug, uniffi::Object)]
+pub struct V1ContentsContainer {
+    cat_id: V1ContentCategories,
+    body: Vec<u8>,
+    to: Option<Vec<u8>>,
+    subject: Option<Vec<u8>>,
+    attachment: Option<Vec<u8>>,
+}
+
+#[uniffi::export]
+impl V1ContentsContainer {
+    #[uniffi::constructor]
+    pub fn new(
+        cat_id: V1ContentCategories,
+        body: Vec<u8>,
+        to: Option<Vec<u8>>,
+        subject: Option<Vec<u8>>,
+        attachment: Option<Vec<u8>>,
+    ) -> Self {
+        Self {
+            cat_id,
+            body,
+            to,
+            subject,
+            attachment,
+        }
+    }
+
+    #[uniffi::constructor]
+    pub fn deserialize(
+        data: &[u8],
+        cat_id: V1ContentCategories,
+        len_att: u16
+    ) -> Result<V1ContentsContainer> {
+        match cat_id {
+            V1ContentCategories::Email => {
+                let email = match V1Emails::deserialize(data, len_att) {
+                    Ok(email) => email,
+                    Err(e) => return Err(e)
+                };
+                Ok(V1ContentsContainer {
+                    cat_id,
+                    body: email.get_body(),
+                    to: Some(email.get_to()),
+                    subject: email.get_subject(),
+                    attachment: email.get_attachment()
+                })
+            }
+            V1ContentCategories::Message => {
+                todo!()
+            }
+            V1ContentCategories::Text => {
+                todo!()
+            }
+            V1ContentCategories::Bridge => {
+                todo!()
+            }
+        }
+    }
+
+    pub fn serialize(
+        &self,
+        cat_id: V1ContentCategories,
+    ) -> Result<Vec<u8>> {
+        match cat_id {
+            V1ContentCategories::Email => {
+                let email = match V1Emails::new(
+                    self.to.clone().unwrap(),
+                    self.body.clone(),
+                    self.subject.clone(),
+                    self.attachment.clone(),
+                ) {
+                    Ok(email) => email,
+                    Err(e) => return Err(e)
+                };
+                email.serialize()
+            }
+            V1ContentCategories::Message => {
+                todo!()
+            }
+            V1ContentCategories::Text => {
+                todo!()
+            }
+            V1ContentCategories::Bridge => {
+                todo!()
+            }
+        }
+    }
 }

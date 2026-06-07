@@ -5,6 +5,9 @@ use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, SessionIdTooLarge};
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
+pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 9;
+pub const ATTACHMENT_SEG_N_HEADER_SIZE: u8 = 3;
+
 #[derive(Debug, PartialEq, uniffi::Object)]
 pub struct V1PayloadWithAttachmentsHeader {
     version: u8,
@@ -70,7 +73,7 @@ impl V1PayloadWithAttachmentsHeader {
         })
     }
 
-    fn serialize(&self) -> Result<Vec<u8>> {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
         let mut byte = bit_utils::put_value(&0, 0, self.version, 5);
@@ -161,7 +164,7 @@ impl V1PayloadWithAttachmentsNoHeader {
         })
     }
 
-    fn serialize(&self) -> Result<Vec<u8>> {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
         let mut byte = bit_utils::put_value(&0, 0, self.version, 5);

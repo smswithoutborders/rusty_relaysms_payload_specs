@@ -1,5 +1,3 @@
-mod sms;
-
 use std::fmt::Debug;
 use std::io::BufRead;
 use std::sync::Arc;
@@ -17,7 +15,16 @@ pub enum V1TransportError {
 
 
 #[uniffi::export(with_foreign)]
-trait Transport: Debug + Send + Sync {
-    fn split(&self) -> Result<Vec<Vec<u8>>, V1TransportError>;
+pub trait Transports: Debug + Send + Sync {
+    fn get_max_payload_size(&self) -> u32;
 }
+
+#[derive(PartialEq, Debug, uniffi::Object)]
+pub struct SMS;
+
+#[uniffi::export]
+impl Transports for SMS {
+    fn get_max_payload_size(&self) -> u32{ 104 }
+}
+
 

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use crate::v1::contents::{V1ContentError, V1Contents};
+use crate::v1::contents::{V1ContentError};
 use crate::v1::contents::message::{V1Messages};
 
 type Result<T> = std::result::Result<T, V1ContentError>;
@@ -30,15 +30,15 @@ impl V1Text {
 //         body: data,
 //     }))
 // }
-// 
+//
 // #[uniffi::export]
 // impl V1Contents for V1Text {
 //     fn serialize(&self) -> Result<Vec<u8>> {
 //         Ok(self.body.clone())
 //     }
-// 
+//
 //     fn get_cat_id(&self) -> u8 { 2 }
-// 
+//
 //     fn equals(&self, other: Arc<dyn V1Contents>) -> bool {
 //         match (self.serialize(), other.serialize()) {
 //             (Ok(a), Ok(b)) => a == b,
@@ -46,17 +46,17 @@ impl V1Text {
 //         }
 //     }
 // }
-// 
-// 
+//
+//
 // #[test]
 // fn test_text_init() {
 //     let body = b"Here is some heavy Lorem Ipsum shit"; //4
 //     let text = V1Text::new(
 //         body.to_vec(),
 //     ).unwrap();
-// 
+//
 //     let serialized = text.serialize().unwrap();
 //     let deserialized = v1_deserialize_text_content(serialized).unwrap();
-// 
+//
 //     assert_eq!(text, deserialized);
 // }

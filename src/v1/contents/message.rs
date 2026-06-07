@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::bit_utils;
 use crate::v1::contents::email::{V1Emails};
-use crate::v1::contents::{V1ContentError, V1Contents};
+use crate::v1::contents::{V1ContentError};
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 #[derive(PartialEq, Debug, uniffi::Object)]
@@ -41,27 +41,27 @@ impl V1Messages {
 //     let len_to = data[0];
 //     let to = data[1..(1 + len_to as usize)].to_vec();
 //     let body = data[(1 + len_to as usize)..].to_vec();
-// 
+//
 //     Ok(Arc::new(V1Messages {
 //         len_to,
 //         to,
 //         body,
 //     }))
 // }
-// 
+//
 // #[uniffi::export]
 // impl V1Contents for V1Messages {
 //     fn serialize(&self) -> Result<Vec<u8>> {
 //         let mut bytes: Vec<u8> = Vec::new(); // TODO: put size here
-// 
+//
 //         bytes.push(self.len_to);
 //         bytes.extend(self.to.clone());
 //         bytes.extend(self.body.clone());
 //         Ok(bytes)
 //     }
-// 
+//
 //     fn get_cat_id(&self) -> u8 { 1 }
-// 
+//
 //     fn equals(&self, other: Arc<dyn V1Contents>) -> bool {
 //         match (self.serialize(), other.serialize()) {
 //             (Ok(a), Ok(b)) => a == b,
@@ -69,8 +69,8 @@ impl V1Messages {
 //         }
 //     }
 // }
-// 
-// 
+//
+//
 // #[test]
 // fn test_message_init() {
 //     let to  = b"example@gmail.com"; //2
@@ -79,9 +79,9 @@ impl V1Messages {
 //         to.to_vec(),
 //         body.to_vec(),
 //     ).unwrap();
-// 
+//
 //     let serialized = message.serialize().unwrap();
 //     let deserialized = v1_deserialize_message_content(serialized).unwrap();
-// 
+//
 //     assert_eq!(message, deserialized);
 // }
