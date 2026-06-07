@@ -72,14 +72,11 @@ impl V1PayloadWithoutAttachments {
         let t_id = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
         let payload = data[6..].to_vec();
 
-        Ok(Arc::new( V1PayloadWithoutAttachments {
-            version,
-            i_tid,
-            i_att,
+        V1PayloadWithoutAttachments::new(
             k_id,
-            t_id: Some(t_id),
-            payload
-        }))
+            Some(t_id),
+            payload.as_slice(),
+        )
     }
 }
 
