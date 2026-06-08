@@ -97,7 +97,7 @@ let response = v1_bridge_offline_first_publisher_decrypt(...)
   );
 
   let payload_att = V1Payloads(
-      contents.content_from(),
+      contents.serialize(),
       k_id,
       len_att,
       t_id,
