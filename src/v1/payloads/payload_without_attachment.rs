@@ -7,7 +7,8 @@ use crate::v1::payloads::V1PayloadsError::{ContentSerializationError, KeyIdTooLa
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
-#[derive(Debug, PartialEq, uniffi::Object)]
+// #[derive(Debug, PartialEq, uniffi::Object)]
+#[derive(Debug, PartialEq)]
 pub struct V1PayloadWithoutAttachments {
     version: u8,
     i_tid: bool,
@@ -17,7 +18,6 @@ pub struct V1PayloadWithoutAttachments {
     payload: Vec<u8>,
 }
 
-#[uniffi::export]
 impl V1PayloadWithoutAttachments {
     pub fn get_i_tid(&self) -> bool { self.i_tid }
     pub fn get_version(&self) -> u8 { self.version }
@@ -25,7 +25,6 @@ impl V1PayloadWithoutAttachments {
     pub fn get_t_id(&self) -> Option<u32> { self.t_id }
     pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
 
-    #[uniffi::constructor]
     pub fn new(
         k_id: u8,
         t_id: Option<u32>,
@@ -64,7 +63,6 @@ impl V1PayloadWithoutAttachments {
         Ok(bytes)
     }
 
-    #[uniffi::constructor]
     pub fn deserialize(data: &[u8]) -> Result<Arc<V1PayloadWithoutAttachments>> {
         let version = bit_utils::get_bits(&data[0], 0, 2);
         let i_tid = bit_utils::is_bit_on(&data[0], 3);

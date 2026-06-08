@@ -5,14 +5,14 @@ use crate::v1::contents::email::V1Emails;
 use crate::v1::contents::{V1ContentCategories, V1ContentVariation};
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, SessionIdTooLarge};
-use crate::v1::transports::SMS;
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
 pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 9;
 pub const ATTACHMENT_SEG_N_HEADER_SIZE: u8 = 3;
 
-#[derive(Debug, PartialEq, uniffi::Object)]
+// #[derive(Debug, PartialEq, uniffi::Object)]
+#[derive(Debug, PartialEq)]
 pub struct V1PayloadWithAttachmentsHeader {
     version: u8,
     i_tid: bool,
@@ -22,20 +22,19 @@ pub struct V1PayloadWithAttachmentsHeader {
     k_id: u8,
     len_att: u16,
     t_id: Option<u32>,
-    payload: Vec<u8>,
+    content: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq, uniffi::Object)]
+#[derive(Debug, PartialEq)]
 pub struct V1PayloadWithAttachmentsNoHeader {
     version: u8,
     i_tid: bool,
     i_att: bool,
     seg_num: u8,
     sess_id: u8,
-    payload: Vec<u8>
+    content: Vec<u8>
 }
 
-#[uniffi::export]
 impl V1PayloadWithAttachmentsHeader {
     pub fn get_i_tid(&self) -> bool { self.i_tid }
     pub fn get_version(&self) -> u8 { self.version }
@@ -43,9 +42,8 @@ impl V1PayloadWithAttachmentsHeader {
     pub fn get_k_id(&self) -> u8 { self.k_id }
     pub fn get_t_id(&self) -> Option<u32> { self.t_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
-    pub fn get_payload_content(&self) -> Vec<u8> { self.payload.clone() }
+    pub fn get_content(&self) -> Vec<u8> { self.content.clone() }
 
-    #[uniffi::constructor]
     pub fn new(
         sess_id: u8,
         k_id: u8,
@@ -73,7 +71,7 @@ impl V1PayloadWithAttachmentsHeader {
             k_id,
             t_id,
             len_att,
-            payload,
+            content: payload,
         })
     }
 
@@ -99,12 +97,11 @@ impl V1PayloadWithAttachmentsHeader {
         }
         bytes.extend(self.len_att.to_le_bytes());
 
-        bytes.extend(self.payload.clone());
+        bytes.extend(self.content.clone());
         Ok(bytes)
     }
 
 
-    #[uniffi::constructor]
     pub fn deserialize(data: &[u8]) -> Result<Self> {
         let version = bit_utils::get_bits(&data[0], 0, 2);
         let i_tid = bit_utils::is_bit_on(&data[0], 3);
@@ -136,18 +133,16 @@ impl V1PayloadWithAttachmentsHeader {
             k_id,
             t_id: Some(t_id),
             len_att,
-            payload,
+            content: payload,
         })
     }
 }
 
-#[uniffi::export]
 impl V1PayloadWithAttachmentsNoHeader {
     pub fn get_sess_id(&self) -> u8 { self.sess_id }
     pub fn get_seg_num(&self) -> u8 { self.seg_num }
-    pub fn get_payload(&self) -> Vec<u8> { self.payload.clone() }
+    pub fn get_payload(&self) -> Vec<u8> { self.content.clone() }
 
-    #[uniffi::constructor]
     pub fn new(
         version: u8,
         seg_num: u8,
@@ -164,7 +159,7 @@ impl V1PayloadWithAttachmentsNoHeader {
             i_att: true,
             sess_id,
             seg_num,
-            payload,
+            content: payload,
         })
     }
 
@@ -183,12 +178,11 @@ impl V1PayloadWithAttachmentsNoHeader {
 
         let byte = bit_utils::get_bits(&self.seg_num, 4, 7);
         bytes.push(byte);
-        bytes.extend(self.payload.clone());
+        bytes.extend(self.content.clone());
 
         Ok(bytes)
     }
 
-    #[uniffi::constructor]
     pub fn deserialize(data: &[u8]) -> Result<Self> {
         let version = bit_utils::get_bits(&data[0], 0, 2);
         let i_tid = bit_utils::is_bit_on(&data[0], 3);
@@ -211,7 +205,7 @@ impl V1PayloadWithAttachmentsNoHeader {
                 i_att,
                 sess_id,
                 seg_num,
-                payload
+                content: payload
             }
         )
     }

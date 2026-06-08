@@ -13,18 +13,18 @@ pub enum V1TransportError {
     FailedToSplit,
 }
 
-
-#[uniffi::export(with_foreign)]
-pub trait Transports: Debug + Send + Sync {
-    fn get_max_payload_size(&self) -> u32;
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum Transports {
+    Sms
 }
 
-#[derive(PartialEq, Debug, uniffi::Object)]
-pub struct SMS;
-
 #[uniffi::export]
-impl Transports for SMS {
-    fn get_max_payload_size(&self) -> u32{ 104 }
+impl Transports {
+    pub fn get_max_payload_size(&self) -> u32{
+        match self {
+            Transports::Sms => 104,
+        }
+    }
 }
 
 

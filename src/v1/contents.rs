@@ -90,6 +90,12 @@ pub struct V1ContentsContainer {
 
 #[uniffi::export]
 impl V1ContentsContainer {
+    pub fn get_cat_id(&self) -> V1ContentCategories { self.cat_id.clone() }
+    pub fn get_body(&self) -> Vec<u8> { self.body.clone() }
+    pub fn get_to(&self) -> Option<Vec<u8>> { self.to.clone() }
+    pub fn get_subject(&self) -> Option<Vec<u8>> { self.subject.clone() }
+    pub fn get_attachment(&self) -> Option<Vec<u8>> { self.attachment.clone() }
+
     #[uniffi::constructor]
     pub fn new(
         cat_id: V1ContentCategories,
@@ -107,65 +113,51 @@ impl V1ContentsContainer {
         }
     }
 
-    pub fn content_from(&self) -> Result<V1ContentVariation>{
-        Ok(match self.cat_id {
-            V1ContentCategories::Email | V1ContentCategories::Bridge => {
-                if self.to.is_none() {
-                    return Err(V1ContentError::MissingTo);
-                }
-                V1ContentVariation::EMAIL { value: V1Emails::new(
-                    self.to.clone().unwrap(),
-                    self.body.clone(),
-                    self.subject.clone(),
-                    self.attachment.clone(),
-                )? }
-            }
-            V1ContentCategories::Message => {
-                if self.to.is_none() {
-                    return Err(V1ContentError::MissingTo);
-                }
-                V1ContentVariation::MESSAGE { value: V1Messages::new(
-                    self.to.clone().unwrap(),
-                    self.body.clone(),
-                    self.attachment.clone(),
-                )? }
-            }
-            V1ContentCategories::Text => {
-                V1ContentVariation::TEXT { value: V1Text::new(
-                    self.body.clone(),
-                    self.attachment.clone(),
-                )? }
-            }
-        })
-    }
-
     #[uniffi::constructor]
     pub fn deserialize(
         data: &[u8],
         cat_id: V1ContentCategories,
         len_att: u16
-    ) -> Result<V1ContentVariation> {
+    ) -> Result<V1ContentsContainer> {
         match cat_id {
             V1ContentCategories::Email | V1ContentCategories::Bridge => {
                 let email = match V1Emails::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentVariation::EMAIL { value: email })
+                Ok(V1ContentsContainer {
+                    cat_id,
+                    body: email.get_body(),
+                    to: Some(email.get_to()),
+                    subject: email.get_subject(),
+                    attachment: email.get_attachment(),
+                })
             }
             V1ContentCategories::Message => {
                 let message = match V1Messages::deserialize(data, len_att) {
-                    Ok(email) => email,
+                    Ok(message) => message,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentVariation::MESSAGE { value: message })
+                Ok(V1ContentsContainer {
+                    cat_id,
+                    body: message.get_body(),
+                    to: Some(message.get_to()),
+                    subject: None,
+                    attachment: message.get_attachment(),
+                })
             }
             V1ContentCategories::Text => {
                 let text = match V1Text::deserialize(data, len_att) {
-                    Ok(email) => email,
+                    Ok(text) => text,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentVariation::TEXT { value: text })
+                Ok(V1ContentsContainer {
+                    cat_id,
+                    body: text.get_body(),
+                    to: None,
+                    subject: None,
+                    attachment: text.get_attachment(),
+                })
             }
         }
     }
