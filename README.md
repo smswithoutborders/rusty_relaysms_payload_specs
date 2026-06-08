@@ -83,3 +83,30 @@ let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
 // }
 let response = v1_bridge_offline_first_publisher_decrypt(...)
 ```
+
+### Publishing (with Attachments)
+```rust
+
+// example message
+ let contents = V1ContentsContainer(
+      V1ContentCategories::Message,
+      body,
+      to,
+      subject,
+      attachment
+  );
+
+  let payload_att = V1Payloads(
+      contents.content_from(),
+      k_id,
+      len_att,
+      t_id,
+      sess_id
+  );
+
+// For sending
+let split = payload_att.split(Arc::new(SMS)).unwrap();
+
+// Receiving
+let joined = V1Payloads::join(split, V1ContentCategories::Message).unwrap();
+```
