@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use crate::{bit_utils, v1};
 use crate::v1::contents::email::V1Emails;
+use crate::v1::contents::{V1ContentCategories, V1ContentVariation, V1Contents, V1ContentsContainer};
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{ContentSerializationError, KeyIdTooLarge, MissingPayload, VersionTooLarge};
 
@@ -47,7 +48,7 @@ impl V1PayloadWithoutAttachments {
         }))
     }
 
-    fn serialize(&self) -> Result<Vec<u8>> {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
         let mut bytes: Vec<u8> = Vec::new();
 
         let mut byte1 : u8 = bit_utils::put_value(&0, 0, self.version, 5);
@@ -64,7 +65,7 @@ impl V1PayloadWithoutAttachments {
     }
 
     #[uniffi::constructor]
-    fn deserialize(data: &[u8]) -> Result<Arc<V1PayloadWithoutAttachments>> {
+    pub fn deserialize(data: &[u8]) -> Result<Arc<V1PayloadWithoutAttachments>> {
         let version = bit_utils::get_bits(&data[0], 0, 2);
         let i_tid = bit_utils::is_bit_on(&data[0], 3);
         let i_att = bit_utils::is_bit_on(&data[0], 4);
@@ -80,31 +81,3 @@ impl V1PayloadWithoutAttachments {
     }
 }
 
-
-
-
-// #[test]
-// fn att_false_serialize() {
-//     let to  = b"example@gmail.com"; //2
-//     let body = b"Here is some heavy Lorem Ipsum shit"; //4
-//     let subject = b"More things"; //7
-//     let email = V1Emails::new(
-//         to.to_vec(),
-//         body.to_vec(),
-//         Option::from(subject.to_vec()),
-//     ).unwrap();
-//
-//     let k_id: u8 = 7;
-//     let t_id: u32 = 2;
-//     let payload = email.serialize().unwrap();
-//
-//     let transport_att_false = V1PayloadWithoutAttachments::new(
-//         k_id,
-//         Some(t_id),
-//         payload,
-//     ).unwrap();
-//
-//     let serialized = transport_att_false.serialize().unwrap();
-//     let deserialized = v1_deserialize_payload_without_attachments(&serialized).unwrap();
-//     assert_eq!(transport_att_false, deserialized);
-// }

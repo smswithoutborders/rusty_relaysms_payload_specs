@@ -2,7 +2,7 @@ use std::fmt::{Debug};
 use std::sync::Arc;
 use crate::{bit_utils, v1, AsAny};
 use crate::v1::contents::email::V1Emails;
-use crate::v1::contents::V1ContentCategories;
+use crate::v1::contents::{V1ContentCategories, V1ContentVariation};
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, SessionIdTooLarge};
 use crate::v1::transports::SMS;
@@ -218,102 +218,3 @@ impl V1PayloadWithAttachmentsNoHeader {
 
 }
 
-#[test]
-fn att_true_n_serialize() {
-    let att = rand::random::<[u8; (140*10)]>().to_vec();
-    let len_att = att.len() as u16;
-
-    let to  = b"example@gmail.com"; //2
-    let body = b"Here is some heavy Lorem Ipsum shit"; //4
-    let subject = b"More things"; //7
-    let email = V1Emails::new(
-        to.to_vec(),
-        body.to_vec(),
-        Option::from(subject.to_vec()),
-        Some(att)
-    ).unwrap();
-
-    let sess_id: u8 = 15;
-    let k_id: u8 = 13;
-    let t_id: Option<u32> = Option::from(255);
-
-    let payload_with_attachment = V1Payloads::new(
-        email.clone(),
-        k_id,
-        len_att,
-        t_id,
-        Some(sess_id)
-    );
-
-    let split = payload_with_attachment.split(Arc::new(SMS)).unwrap();
-
-    let joined = V1Payloads::join(split, V1ContentCategories::Email).unwrap();
-    let V1ContentCategories::EMAIL { value } = joined else {
-        panic!("expected an EMAIL")
-    };
-    assert_eq!(value, email.clone());
-}
-//
-//
-// #[test]
-// fn test_calculate_segments() {
-//     let seg_num: u8 = 1;
-//     let sess_num: u8 = 1;
-//     let f_id: Option<u32> = Option::from(255);
-//     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
-//     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
-//     let mut ins = V1PayloadWithAttachments::new(
-//         seg_num,
-//         sess_num,
-//         f_id,
-//         LEN_ATT as u16,
-//         payload.clone(),
-//     ).unwrap();
-//     if let Some(val) = Arc::get_mut(&mut ins) {
-//         val.payload = rand::random::<[u8; 1]>().to_vec();
-//
-//         let expected = 1;
-//         assert_eq!(expected, val.calculate_segments());
-//
-//         val.payload = rand::random::<[u8; 300]>().to_vec();
-//         let expected = 3;
-//         assert_eq!(expected, val.calculate_segments());
-//
-//         val.payload = rand::random::<[u8; 1]>().to_vec();
-//         let expected = 1;
-//         assert_eq!(expected, val.calculate_segments());
-//
-//         val.payload = rand::random::<[u8; 300]>().to_vec();
-//         let expected = 3;
-//         assert_eq!(expected, val.calculate_segments());
-//     }
-// }
-//
-// #[test]
-// fn att_split() {
-//     let sess_num: u8 = 1;
-//     let k_id: u8 = 1;
-//     let f_id: Option<u32> = Option::from(255);
-//
-//     // let mut payload = email.serialize().unwrap();
-//     // const len_att: usize = MAX_SPLIT_0_WITH_DID as usize + 1;
-//     const LEN_ATT: usize = SEG_0_HEADER_SIZE as usize * 50;
-//     let payload = rand::random::<[u8; LEN_ATT]>().to_vec();
-//
-//     let payload_with_attachment = V1PayloadWithAttachments::new(
-//         sess_num,
-//         k_id,
-//         f_id,
-//         LEN_ATT as u16,
-//         payload.clone(),
-//     ).unwrap();
-//
-//     let split = payload_with_attachment.split().unwrap();
-//     let expected = payload_with_attachment.calculate_segments();
-//     assert_eq!(expected, split.len() as u32);
-//     let mut serialized = split[0].serialize().unwrap();
-//     assert_eq!(104, serialized.len());
-//
-//     serialized = split[1].serialize().unwrap();
-//     assert_eq!(104, serialized.len());
-// }

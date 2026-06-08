@@ -12,14 +12,17 @@ pub mod text;
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 
-#[derive(uniffi::Enum, Debug, PartialEq)]
+#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
 #[repr(u8)]
 pub enum V1ContentCategories {
     Email = 0x0,
     Message = 0x1,
     Text = 0x2,
     Bridge = 0x3,
+}
 
+#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
+pub enum V1ContentVariation {
     EMAIL { value: Arc<V1Emails> },
     MESSAGE { value: Arc<V1Messages> },
     TEXT { value: Arc<V1Text> },
@@ -100,8 +103,40 @@ impl V1ContentsContainer {
             body,
             to,
             subject,
-            attachment,
+            attachment
         }
+    }
+
+    pub fn content_from(&self) -> Result<V1ContentVariation>{
+        Ok(match self.cat_id {
+            V1ContentCategories::Email | V1ContentCategories::Bridge => {
+                if self.to.is_none() {
+                    return Err(V1ContentError::MissingTo);
+                }
+                V1ContentVariation::EMAIL { value: V1Emails::new(
+                    self.to.clone().unwrap(),
+                    self.body.clone(),
+                    self.subject.clone(),
+                    self.attachment.clone(),
+                )? }
+            }
+            V1ContentCategories::Message => {
+                if self.to.is_none() {
+                    return Err(V1ContentError::MissingTo);
+                }
+                V1ContentVariation::MESSAGE { value: V1Messages::new(
+                    self.to.clone().unwrap(),
+                    self.body.clone(),
+                    self.attachment.clone(),
+                )? }
+            }
+            V1ContentCategories::Text => {
+                V1ContentVariation::TEXT { value: V1Text::new(
+                    self.body.clone(),
+                    self.attachment.clone(),
+                )? }
+            }
+        })
     }
 
     #[uniffi::constructor]
@@ -109,40 +144,34 @@ impl V1ContentsContainer {
         data: &[u8],
         cat_id: V1ContentCategories,
         len_att: u16
-    ) -> Result<V1ContentCategories> {
+    ) -> Result<V1ContentVariation> {
         match cat_id {
             V1ContentCategories::Email | V1ContentCategories::Bridge => {
                 let email = match V1Emails::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentCategories::EMAIL { value: email })
+                Ok(V1ContentVariation::EMAIL { value: email })
             }
             V1ContentCategories::Message => {
                 let message = match V1Messages::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentCategories::MESSAGE { value: message })
+                Ok(V1ContentVariation::MESSAGE { value: message })
             }
             V1ContentCategories::Text => {
                 let text = match V1Text::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
                 };
-                Ok(V1ContentCategories::TEXT { value: text })
-            }
-            _ => {
-                todo!()
+                Ok(V1ContentVariation::TEXT { value: text })
             }
         }
     }
 
-    pub fn serialize(
-        &self,
-        cat_id: V1ContentCategories,
-    ) -> Result<Vec<u8>> {
-        match cat_id {
+    pub fn serialize( &self, ) -> Result<Vec<u8>> {
+        match self.cat_id {
             V1ContentCategories::Email | V1ContentCategories::Bridge => {
                 let email = match V1Emails::new(
                     self.to.clone().unwrap(),
@@ -175,9 +204,6 @@ impl V1ContentsContainer {
                     Err(e) => return Err(e)
                 };
                 text.serialize()
-            }
-            _ => {
-                todo!()
             }
         }
     }

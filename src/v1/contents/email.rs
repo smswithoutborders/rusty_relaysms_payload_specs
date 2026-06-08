@@ -108,7 +108,7 @@ impl V1Contents for V1Emails {
 }
 
 #[test]
-fn test_email_init() {
+fn test_emails() {
     let to  = b"example@gmail.com"; //2
     let body = b"Here is some heavy Lorem Ipsum shit"; //4
     let subject = b"More things"; //7
