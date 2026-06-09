@@ -396,6 +396,20 @@ fn test_payload_with_attachments() {
         contents.serialize().unwrap(),
         k_id,
         len_att,
+        // t_id,
+        None,
+        Some(sess_id)
+    ).unwrap();
+
+    let split = payload_att.split(Transports::Sms).unwrap();
+
+    let joined = V1Payloads::join(split).unwrap();
+    assert_eq!(payload_att, joined);
+
+    let payload_att = V1Payloads::new(
+        contents.serialize().unwrap(),
+        k_id,
+        len_att,
         t_id,
         Some(sess_id)
     ).unwrap();

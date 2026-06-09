@@ -120,9 +120,13 @@ impl V1PayloadWithAttachmentsHeader {
             return Err(V1PayloadsError::InvalidStartSegmentNumber {seg_num});
         }
         let k_id = bit_utils::get_bits(&data[2], 4, 7);
-        let t_id = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
-        let len_att = u16::from_le_bytes([data[7], data[8]]);
-        let payload = data[9..].to_vec();
+        let mut current_index = 3;
+        let t_id = if i_tid {
+            current_index = 7;
+            Some(u32::from_le_bytes([data[3], data[4], data[5], data[6]]))
+        } else { None };
+        let len_att = u16::from_le_bytes([data[current_index], data[current_index+1]]);
+        let payload = data[current_index + 2..].to_vec();
 
         Ok(V1PayloadWithAttachmentsHeader {
             version,
@@ -131,7 +135,7 @@ impl V1PayloadWithAttachmentsHeader {
             sess_id,
             seg_num,
             k_id,
-            t_id: Some(t_id),
+            t_id,
             len_att,
             content: payload,
         })
