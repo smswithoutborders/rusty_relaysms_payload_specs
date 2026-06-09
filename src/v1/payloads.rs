@@ -318,7 +318,7 @@ fn test_payload_without_attachments() {
     let subject = b"More things"; //7
     let k_id: u8 = 7;
     let t_id: u32 = 2;
-    let cat_id = V1ContentCategories::Message;
+    let cat_id = V1ContentCategories::Bridge;
 
     let contents = V1ContentsContainer::new(
         cat_id.clone(),
@@ -339,6 +339,35 @@ fn test_payload_without_attachments() {
     let serialized = transport_att_false.serialize().unwrap();
     let deserialized = V1Payloads::deserialize(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
+
+    let content = V1ContentsContainer::deserialize(
+        deserialized.get_payload().as_slice(), cat_id.clone(), 0).unwrap();
+    assert_eq!(contents, content);
+
+    // No token id
+    let contents = V1ContentsContainer::new(
+        cat_id.clone(),
+        body.to_vec(),
+        Some(to.to_vec()),
+        Some(subject.to_vec()),
+        None
+    );
+
+    let transport_att_false = V1Payloads::new(
+        contents.serialize().unwrap(),
+        k_id,
+        0,
+        None,
+        None
+    ).unwrap();
+
+    let serialized = transport_att_false.serialize().unwrap();
+    let deserialized = V1Payloads::deserialize(&serialized).unwrap();
+    assert_eq!(Arc::new(transport_att_false), deserialized);
+
+    let content = V1ContentsContainer::deserialize(
+        deserialized.get_payload().as_slice(), cat_id, 0).unwrap();
+    assert_eq!(contents, content);
 }
 
 #[test]

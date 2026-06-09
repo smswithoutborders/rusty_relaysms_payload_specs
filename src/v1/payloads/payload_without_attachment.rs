@@ -68,12 +68,16 @@ impl V1PayloadWithoutAttachments {
         let i_tid = bit_utils::is_bit_on(&data[0], 3);
         let i_att = bit_utils::is_bit_on(&data[0], 4);
         let k_id = data[1];
-        let t_id = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
-        let payload = data[6..].to_vec();
+        let mut current_index = 2;
+        let t_id = if i_tid {
+            current_index = 6;
+            Some(u32::from_le_bytes([data[2], data[3], data[4], data[5]]))
+        } else { None };
+        let payload = data[current_index..].to_vec();
 
         V1PayloadWithoutAttachments::new(
             k_id,
-            Some(t_id),
+            t_id,
             payload.as_slice(),
         )
     }
