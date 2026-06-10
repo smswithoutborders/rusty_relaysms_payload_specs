@@ -1,5 +1,5 @@
 mod platforms;
-mod oauth;
+mod requests;
 mod tokens;
 mod bridges;
 

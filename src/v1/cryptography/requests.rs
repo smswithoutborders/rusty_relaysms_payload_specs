@@ -1,3 +1,4 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use hkdf::Hkdf;
@@ -6,7 +7,7 @@ use sha2::Sha256;
 use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 use crate::v1::cryptography::V1CryptographicError;
 
-fn oauth_url_key_derivation(
+fn requests_key_derivation(
     dh: SharedSecret,
     dh1: SharedSecret
 ) -> (Vec<u8>, Vec<u8>) {
@@ -29,13 +30,21 @@ fn oauth_url_key_derivation(
 
     (key.to_vec(), nonce.to_vec())
 }
+
+#[derive(PartialEq, Debug, uniffi::Record)]
+struct RequestPayload {
+    pub ciphertext: Vec<u8>,
+    pub timestamp: u64
+}
+
+
 #[uniffi::export]
-fn v1_oauth_encrypt(
-    ec_pk: Vec<u8>,
-    ss_kid: Vec<u8>,
-    es: Vec<u8>,
-    url: Vec<u8>,
-) -> Result<Vec<u8>, V1CryptographicError> {
+fn requests_encrypt(
+    ec_pk: &[u8],
+    ss_kid: &[u8],
+    es: &[u8],
+    method_name: &[u8],
+) -> Result<RequestPayload, V1CryptographicError> {
 
     let ec_pk: [u8; 32] = ec_pk.try_into().expect("ec_pk should be 32 bytes");
     let ec_pk = PublicKey::from(ec_pk);
@@ -52,20 +61,30 @@ fn v1_oauth_encrypt(
         es_pk.to_bytes().to_vec(),
     ].concat();
 
+    let start = SystemTime::now();
+    let timestamp = start
+        .duration_since(UNIX_EPOCH)
+        .expect("time should go forward")
+        .as_secs();
+
+    let request_string = [method_name, timestamp.to_le_bytes().as_slice()].concat();
     let payload = Payload {
-        msg: url.as_slice(),
+        msg: request_string.as_slice(),
         aad: associated_data.as_slice(),
     };
 
     let dh = ss_kid.diffie_hellman(&ec_pk);
     let dh1 = es.diffie_hellman(&ec_pk);
 
-    let (aes_key, nonce) = oauth_url_key_derivation(dh, dh1);
+    let (aes_key, nonce) = requests_key_derivation(dh, dh1);
     let nonce = Nonce::try_from(nonce.as_slice()).unwrap();
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
         .expect("Aes256Gcm::new_from_slice failed");
     match cipher.encrypt(&nonce, payload) {
-        Ok(ciphertext) => Ok(ciphertext.to_vec()),
+        Ok(ciphertext) => Ok( RequestPayload {
+            ciphertext,
+            timestamp
+        }),
         Err(e) => Err(V1CryptographicError::FailedToEncrypt {
             err: e.to_string(),
         })
@@ -74,11 +93,11 @@ fn v1_oauth_encrypt(
 
 
 #[uniffi::export]
-fn v1_oauth_decrypt(
-    ec_kid: Vec<u8>,
-    ss_kid_pk: Vec<u8>,
-    es_kid_pk: Vec<u8>,
-    ciphertext: Vec<u8>,
+fn requests_decrypt(
+    ec_kid: &[u8],
+    ss_kid_pk: &[u8],
+    es_kid_pk: &[u8],
+    ciphertext: &[u8],
 ) -> Result<Vec<u8>, V1CryptographicError> {
     let ss_kid_pk: [u8; 32] = ss_kid_pk.try_into().expect("ss_kid_pk should be 32 bytes");
     let ss_kid_pk = PublicKey::from(ss_kid_pk);
@@ -90,21 +109,20 @@ fn v1_oauth_decrypt(
     let ec_kid = StaticSecret::from(ec_kid);
     let ec_kid_pk = PublicKey::from(&ec_kid);
 
-
     let associated_data = [
         ec_kid_pk.to_bytes().to_vec(),
         es_kid_pk.to_bytes().to_vec(),
     ].concat();
 
     let payload = Payload {
-        msg: ciphertext.as_slice(),
+        msg: ciphertext,
         aad: associated_data.as_slice(),
     };
 
     let dh = ec_kid.diffie_hellman(&ss_kid_pk);
     let dh1 = ec_kid.diffie_hellman(&es_kid_pk);
 
-    let (aes_key, nonce) = oauth_url_key_derivation(dh, dh1);
+    let (aes_key, nonce) = requests_key_derivation(dh, dh1);
     let nonce = Nonce::try_from(nonce.as_slice()).unwrap();
 
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
@@ -118,33 +136,35 @@ fn v1_oauth_decrypt(
 }
 
 #[test]
-fn test_oauth2_encryption_decryption() {
+fn test_request_encryption_decryption() {
     let rng: [u8; 32] = rand::rng().random();
     let ec_kid = StaticSecret::from(rng);
     let ec_kid_pk = PublicKey::from(&ec_kid);
 
     let rng: [u8; 32] = rand::rng().random();
     let ss_kid = StaticSecret::from(rng);
-    let ss_kid_pk = PublicKey::from(&ss_kid).as_bytes().to_vec();
 
     let rng: [u8; 32] = rand::rng().random();
     let es_kid = StaticSecret::from(rng);
 
-    let url= b"https://example.com?alltheway=true";
-    let ciphertext = v1_oauth_encrypt(
-        ec_kid_pk.to_bytes().to_vec(),
-        ss_kid.to_bytes().to_vec(),
-        es_kid.to_bytes().to_vec(),
-        url.as_slice().to_vec(),
+    let method_name= b"/send";
+    let ciphertext = requests_encrypt(
+        ec_kid_pk.to_bytes().as_slice(),
+        ss_kid.to_bytes().as_slice(),
+        es_kid.to_bytes().as_slice(),
+        method_name.as_slice(),
+    ).unwrap();
+    let request_string = [method_name,
+        ciphertext.timestamp.to_le_bytes().as_slice()].concat();
+
+    let es_kid_pk = PublicKey::from(&es_kid);
+    let ss_kid_pk = PublicKey::from(&ss_kid);
+    let decrypted = requests_decrypt(
+        ec_kid.to_bytes().as_slice(),
+        ss_kid_pk.as_bytes(),
+        es_kid_pk.as_bytes(),
+        ciphertext.ciphertext.as_slice(),
     ).unwrap();
 
-    let es_kid_pk = PublicKey::from(&es_kid).as_bytes().to_vec();
-    let decrypted = v1_oauth_decrypt(
-        ec_kid.to_bytes().to_vec(),
-        ss_kid_pk,
-        es_kid_pk,
-        ciphertext,
-    ).unwrap();
-
-    assert_eq!(url.to_vec(), decrypted);
+    assert_eq!(request_string.to_vec(), decrypted);
 }
