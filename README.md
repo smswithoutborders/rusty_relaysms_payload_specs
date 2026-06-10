@@ -33,18 +33,7 @@ let payload: RequesetPayload = v1_requests_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let _ = v1_token_decrypt(payload.ciphertext)
-```
-
-### OAuth URL
-```rust
-// Get token
-// Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext_url = v1_oauth_encrypt(...)
-
-// Verify token
-// Returns `FailedToDecrypt` in cases cannot decrypt
-let url = v1_oauth_decrypt(...)
+let _ = v1_requests_decrypt(payload.ciphertext)
 ```
 
 ### Platform publisher
@@ -113,5 +102,8 @@ let response = v1_bridge_offline_first_publisher_decrypt(...)
 let split = payload_att.split(Arc::new(SMS)).unwrap();
 
 // Receiving
-let joined = V1Payloads::join(split, V1ContentCategories::Message).unwrap();
+let joined = V1Payloads::join(split, V1ContentCategories::Message)
+
+...//
+// Joined can be parsed to either platform or bridge for publishing
 ```
