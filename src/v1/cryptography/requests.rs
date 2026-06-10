@@ -8,18 +8,13 @@ use sha2::Sha256;
 use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 use crate::v1::cryptography::V1CryptographicError;
 
-fn requests_key_derivation(
-    dh: SharedSecret,
-    dh1: SharedSecret
-) -> Vec<u8> {
+fn requests_key_derivation( dh: SharedSecret, ) -> Vec<u8> {
     const TOKEN_PROTOCOL: &[u8] = b"Noise_NK_0RTT_25519_AESGCM";
     const TOKEN_SALT: &[u8] = b"RelaySMS v1";
     const TOKEN_DS: &[u8] = b"RelaySMS Publisher O-Auth2.0 v1";
-    let mut iter = dh.to_bytes().into_iter().chain(dh1.to_bytes());
-    let con_dh_dh1: [u8; 64] = std::array::from_fn(|i| { iter.next().unwrap() });
 
     let (_, hk) = Hkdf::<Sha256>::extract(
-        Option::from(TOKEN_SALT), con_dh_dh1.as_slice());
+        Option::from(TOKEN_SALT), dh.as_bytes().as_slice());
 
     let info = [TOKEN_PROTOCOL, [0x00u8].as_slice(), TOKEN_DS].concat();
     let mut key = [0u8; 32];
@@ -38,26 +33,21 @@ struct RequestPayload {
 
 #[uniffi::export]
 fn v1_requests_encrypt(
-    ec_pk: &[u8],
-    ss_kid: &[u8],
-    es: &[u8],
+    ec: &[u8],
+    ss_kid_pk: &[u8],
     method_name: &[u8],
     payload: Option<Vec<u8>>
 ) -> Result<RequestPayload, V1CryptographicError> {
+    let ec: [u8; 32] = ec.try_into().expect("es_kid should be 32 bytes");
+    let ec = StaticSecret::from(ec);
+    let ec_pk = PublicKey::from(&ec);
 
-    let ec_pk: [u8; 32] = ec_pk.try_into().expect("ec_pk should be 32 bytes");
-    let ec_pk = PublicKey::from(ec_pk);
-
-    let ss_kid: [u8; 32] = ss_kid.try_into().expect("ss_kid should be 32 bytes");
-    let ss_kid = StaticSecret::from(ss_kid);
-
-    let es: [u8; 32] = es.try_into().expect("es_kid should be 32 bytes");
-    let es = StaticSecret::from(es);
-    let es_pk = PublicKey::from(&es);
+    let ss_kid_pk: [u8; 32] = ss_kid_pk.try_into().expect("ss_kid_pk should be 32 bytes");
+    let ss_kid_pk = PublicKey::from(ss_kid_pk);
 
     let associated_data = [
         ec_pk.to_bytes().to_vec(),
-        es_pk.to_bytes().to_vec(),
+        ss_kid_pk.to_bytes().to_vec(),
     ].concat();
 
     let start = SystemTime::now();
@@ -80,10 +70,8 @@ fn v1_requests_encrypt(
         aad: associated_data.as_slice(),
     };
 
-    let dh = ss_kid.diffie_hellman(&ec_pk);
-    let dh1 = es.diffie_hellman(&ec_pk);
-
-    let aes_key = requests_key_derivation(dh, dh1);
+    let dh = ec.diffie_hellman(&ss_kid_pk);
+    let aes_key = requests_key_derivation(dh);
 
     let rng: [u8; 12] = rand::rng().random();
     let nonce = rng.as_slice();
@@ -105,25 +93,21 @@ fn v1_requests_encrypt(
 
 #[uniffi::export]
 fn v1_requests_decrypt(
-    ec_kid: &[u8],
-    ss_kid_pk: &[u8],
-    es_kid_pk: &[u8],
+    ss_kid: &[u8],
+    ec_pk: &[u8],
     nonce: Vec<u8>,
     ciphertext: &[u8],
 ) -> Result<Vec<u8>, V1CryptographicError> {
-    let ss_kid_pk: [u8; 32] = ss_kid_pk.try_into().expect("ss_kid_pk should be 32 bytes");
-    let ss_kid_pk = PublicKey::from(ss_kid_pk);
+    let ss_kid: [u8; 32] = ss_kid.try_into().expect("ss_kid should be 32 bytes");
+    let ss_kid = StaticSecret::from(ss_kid);
+    let ss_kid_pk = PublicKey::from(&ss_kid);
 
-    let es_kid_pk: [u8; 32] = es_kid_pk.try_into().expect("es_kid_pk should be 32 bytes");
-    let es_kid_pk = PublicKey::from(es_kid_pk);
-
-    let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
-    let ec_kid = StaticSecret::from(ec_kid);
-    let ec_kid_pk = PublicKey::from(&ec_kid);
+    let ec_pk: [u8; 32] = ec_pk.try_into().expect("ec_pk should be 32 bytes");
+    let ec_pk = PublicKey::from(ec_pk);
 
     let associated_data = [
-        ec_kid_pk.to_bytes().to_vec(),
-        es_kid_pk.to_bytes().to_vec(),
+        ec_pk.to_bytes().to_vec(),
+        ss_kid_pk.to_bytes().to_vec(),
     ].concat();
 
     let payload = Payload {
@@ -131,10 +115,9 @@ fn v1_requests_decrypt(
         aad: associated_data.as_slice(),
     };
 
-    let dh = ec_kid.diffie_hellman(&ss_kid_pk);
-    let dh1 = ec_kid.diffie_hellman(&es_kid_pk);
+    let dh = ss_kid.diffie_hellman(&ec_pk);
 
-    let aes_key = requests_key_derivation(dh, dh1);
+    let aes_key = requests_key_derivation(dh);
     let nonce = Nonce::try_from(nonce.as_slice()).unwrap();
 
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
@@ -148,7 +131,7 @@ fn v1_requests_decrypt(
             let payload = &ciphertext[total_len as usize..];
             Ok(payload.to_vec())
         },
-        Err(e) => Err(V1CryptographicError::FailedToEncrypt {
+        Err(e) => Err(V1CryptographicError::FailedToDecrypt {
             err: e.to_string(),
         })
     }
@@ -163,26 +146,20 @@ fn test_request_encryption_decryption() {
     let rng: [u8; 32] = rand::rng().random();
     let ss_kid = StaticSecret::from(rng);
 
-    let rng: [u8; 32] = rand::rng().random();
-    let es_kid = StaticSecret::from(rng);
-
     let method_name= b"/send";
     let payload: [u8; 64] = rand::rng().random();
 
+    let ss_kid_pk = PublicKey::from(&ss_kid);
     let ciphertext = v1_requests_encrypt(
-        ec_kid_pk.to_bytes().as_slice(),
-        ss_kid.to_bytes().as_slice(),
-        es_kid.to_bytes().as_slice(),
+        ec_kid.to_bytes().as_slice(),
+        ss_kid_pk.to_bytes().as_slice(),
         method_name.as_slice(),
         Some(payload.to_vec()),
     ).unwrap();
 
-    let es_kid_pk = PublicKey::from(&es_kid);
-    let ss_kid_pk = PublicKey::from(&ss_kid);
     let decrypted = v1_requests_decrypt(
-        ec_kid.to_bytes().as_slice(),
-        ss_kid_pk.as_bytes(),
-        es_kid_pk.as_bytes(),
+        ss_kid.as_bytes(),
+        ec_kid_pk.to_bytes().as_slice(),
         ciphertext.nonce,
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
@@ -190,17 +167,15 @@ fn test_request_encryption_decryption() {
     assert_eq!(payload.to_vec(), decrypted);
 
     let ciphertext = v1_requests_encrypt(
-        ec_kid_pk.to_bytes().as_slice(),
-        ss_kid.to_bytes().as_slice(),
-        es_kid.to_bytes().as_slice(),
+        ec_kid.to_bytes().as_slice(),
+        ss_kid_pk.to_bytes().as_slice(),
         method_name.as_slice(),
-        None
+        None,
     ).unwrap();
 
     let decrypted = v1_requests_decrypt(
-        ec_kid.to_bytes().as_slice(),
-        ss_kid_pk.as_bytes(),
-        es_kid_pk.as_bytes(),
+        ss_kid.as_bytes(),
+        ec_kid_pk.to_bytes().as_slice(),
         ciphertext.nonce,
         ciphertext.ciphertext.as_slice(),
     ).unwrap();

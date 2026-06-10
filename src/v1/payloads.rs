@@ -161,7 +161,7 @@ impl V1Payloads {
         })
     }
 
-    pub fn serialize_for_storage(&self) -> Result<Vec<u8>> {
+    pub fn serialize_with_attachment(&self) -> Result<Vec<u8>> {
         if self.sess_id.is_none() {
             return Err(V1PayloadsError::SerializerNeedsSessionId)
         }
@@ -176,7 +176,7 @@ impl V1Payloads {
     }
 
     #[uniffi::constructor]
-    pub fn deserialize_from_storage(data: &[u8]) -> Result<Arc<V1Payloads>> {
+    pub fn deserialize_with_attachment(data: &[u8]) -> Result<Arc<V1Payloads>> {
         let payload =
             V1PayloadWithAttachmentsHeader::deserialize(data)?;
         Ok(Arc::new(V1Payloads::new(
@@ -189,7 +189,7 @@ impl V1Payloads {
     }
 
     // For content without attachment
-    pub fn serialize(&self) -> Result<Vec<u8>> {
+    pub fn serialize_without_attachment(&self) -> Result<Vec<u8>> {
         if self.len_att > 0 {
             return Err(V1PayloadsError::AttachmentLengthPresentForSerialize{ len: self.len_att })
         };
@@ -202,7 +202,7 @@ impl V1Payloads {
     }
 
     #[uniffi::constructor]
-    pub fn deserialize(data: &[u8]) -> Result<Arc<V1Payloads>> {
+    pub fn deserialize_without_attachment(data: &[u8]) -> Result<Arc<V1Payloads>> {
         let payload =
             V1PayloadWithoutAttachments::deserialize(data)?;
         Ok(Arc::new(V1Payloads::new(
@@ -336,8 +336,8 @@ fn test_payload_without_attachments() {
         None
     ).unwrap();
 
-    let serialized = transport_att_false.serialize().unwrap();
-    let deserialized = V1Payloads::deserialize(&serialized).unwrap();
+    let serialized = transport_att_false.serialize_without_attachment().unwrap();
+    let deserialized = V1Payloads::deserialize_without_attachment(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
 
     let content = V1ContentsContainer::deserialize(
@@ -361,8 +361,8 @@ fn test_payload_without_attachments() {
         None
     ).unwrap();
 
-    let serialized = transport_att_false.serialize().unwrap();
-    let deserialized = V1Payloads::deserialize(&serialized).unwrap();
+    let serialized = transport_att_false.serialize_without_attachment().unwrap();
+    let deserialized = V1Payloads::deserialize_without_attachment(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
 
     let content = V1ContentsContainer::deserialize(
