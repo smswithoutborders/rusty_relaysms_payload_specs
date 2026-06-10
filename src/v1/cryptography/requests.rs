@@ -11,7 +11,7 @@ use crate::v1::cryptography::V1CryptographicError;
 fn requests_key_derivation(
     dh: SharedSecret,
     dh1: SharedSecret
-) -> (Vec<u8>, Vec<u8>) {
+) -> Vec<u8> {
     const TOKEN_PROTOCOL: &[u8] = b"Noise_NK_0RTT_25519_AESGCM";
     const TOKEN_SALT: &[u8] = b"RelaySMS v1";
     const TOKEN_DS: &[u8] = b"RelaySMS Publisher O-Auth2.0 v1";
@@ -25,17 +25,14 @@ fn requests_key_derivation(
     let mut key = [0u8; 32];
     hk.expand(info.as_slice(), &mut key).expect("expansion should be ok");
 
-    let info = [TOKEN_PROTOCOL, [0x01u8].as_slice(), TOKEN_DS].concat();
-    let mut nonce = [0u8; 12];
-    hk.expand(info.as_slice(), &mut nonce).expect("expansion should be ok");
-
-    (key.to_vec(), nonce.to_vec())
+    key.to_vec()
 }
 
 #[derive(PartialEq, Debug, uniffi::Record)]
 struct RequestPayload {
     pub ciphertext: Vec<u8>,
-    pub timestamp: u64
+    pub timestamp: u64,
+    pub nonce: Vec<u8>,
 }
 
 
@@ -86,14 +83,18 @@ fn v1_requests_encrypt(
     let dh = ss_kid.diffie_hellman(&ec_pk);
     let dh1 = es.diffie_hellman(&ec_pk);
 
-    let (aes_key, nonce) = requests_key_derivation(dh, dh1);
-    let nonce = Nonce::try_from(nonce.as_slice()).unwrap();
+    let aes_key = requests_key_derivation(dh, dh1);
+
+    let rng: [u8; 12] = rand::rng().random();
+    let nonce = rng.as_slice();
+    let nonce1 = Nonce::try_from(nonce).unwrap();
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
         .expect("Aes256Gcm::new_from_slice failed");
-    match cipher.encrypt(&nonce, payload) {
+    match cipher.encrypt(&nonce1, payload) {
         Ok(ciphertext) => Ok( RequestPayload {
             ciphertext,
-            timestamp
+            timestamp,
+            nonce: nonce.to_vec(),
         }),
         Err(e) => Err(V1CryptographicError::FailedToEncrypt {
             err: e.to_string(),
@@ -107,6 +108,7 @@ fn v1_requests_decrypt(
     ec_kid: &[u8],
     ss_kid_pk: &[u8],
     es_kid_pk: &[u8],
+    nonce: Vec<u8>,
     ciphertext: &[u8],
 ) -> Result<Vec<u8>, V1CryptographicError> {
     let ss_kid_pk: [u8; 32] = ss_kid_pk.try_into().expect("ss_kid_pk should be 32 bytes");
@@ -132,7 +134,7 @@ fn v1_requests_decrypt(
     let dh = ec_kid.diffie_hellman(&ss_kid_pk);
     let dh1 = ec_kid.diffie_hellman(&es_kid_pk);
 
-    let (aes_key, nonce) = requests_key_derivation(dh, dh1);
+    let aes_key = requests_key_derivation(dh, dh1);
     let nonce = Nonce::try_from(nonce.as_slice()).unwrap();
 
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
@@ -181,6 +183,7 @@ fn test_request_encryption_decryption() {
         ec_kid.to_bytes().as_slice(),
         ss_kid_pk.as_bytes(),
         es_kid_pk.as_bytes(),
+        ciphertext.nonce,
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
 
@@ -198,6 +201,7 @@ fn test_request_encryption_decryption() {
         ec_kid.to_bytes().as_slice(),
         ss_kid_pk.as_bytes(),
         es_kid_pk.as_bytes(),
+        ciphertext.nonce,
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
 

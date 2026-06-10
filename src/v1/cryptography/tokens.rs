@@ -6,12 +6,6 @@ use sha2::Sha256;
 use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 use crate::v1::cryptography::{triple_dh_decryption, V1CryptographicError};
 
-fn parse_for_token_hash(data: Vec<u8>) -> Vec<u8> {
-    let method_name_len = data[0];
-    data[1 + method_name_len as usize..].to_vec()
-}
-
-
 fn token_key_derivation(
     dh: SharedSecret,
     dh1: SharedSecret
@@ -64,33 +58,33 @@ fn v1_token_decrypt(
         .expect("Aes256Gcm::new_from_slice failed");
 
     match cipher.decrypt(&nonce, payload) {
-        Ok(decrypted_payload) => {
-            Ok(parse_for_token_hash(decrypted_payload))
-        },
+        Ok(decrypted_payload) => Ok(decrypted_payload),
         Err(e) => Err(V1CryptographicError::FailedToDecrypt {
             err: e.to_string(),
         })
     }
 }
 
+/*
+protocol = “3DH_25519_AESGCM”
+salt = “RelaySMS v1”
+ds = “RelaySMS Encryption Key v1”
+dh = DH(sC_id, sS_kid_pk)
+dh1 = DH(eC_kid, eS_kid_pk)
+prk = HKDF-Extract(salt=salt, ikm=dh || dh1)
+aes_key = HKDF-Expand(prk=prk, info = protocol || 0x00 || ds)
+nonce = 0x00 * 12 // safe because aes_key is one-time
+associated_data = Key-id || eC_kid_pk || eS_kid_pk
+encrypted_url = AEAD_ENCRYPT(input = Token, key = aes_key, ad = associated_data, nonce=nonce)
+ */
 #[uniffi::export]
 fn v1_token_encrypt(
     ec_kid: Vec<u8>,
     ss_kid_pk: Vec<u8>,
     es_kid_pk: Vec<u8>,
-    method_name: Vec<u8>,
-    token_hash: Vec<u8>,
     key_id: u8,
+    token: &[u8],
 ) -> Result<Vec<u8>, V1CryptographicError> {
-    if method_name.len() > u8::MAX as usize {
-        return Err(V1CryptographicError::FailedToEncrypt {
-            err: "Method length too long: ".to_string() + method_name.len().to_string().as_str()
-        })
-    }
-    let len = [method_name.len() as u8]; // guarantee = 1 byte
-    let request_string = [len.as_slice(), method_name.as_slice(), token_hash.as_slice()]
-        .concat();
-
     let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
 
     let ec_kid: [u8; 32] = ec_kid.try_into().expect("ec_kid should be 32 bytes");
@@ -103,7 +97,7 @@ fn v1_token_encrypt(
     ].concat();
 
     let payload = Payload {
-        msg: request_string.as_slice(),
+        msg: token,
         aad: associated_data.as_slice(),
     };
 
@@ -140,16 +134,14 @@ fn test_token_encryption_decryption() {
     let es_kid = StaticSecret::from(rng);
     let es_kid_pk = PublicKey::from(&es_kid).as_bytes().to_vec();
 
-    let method_name= b"Sample method name";
     let token_hash= b"Sample token hash";
     let key_id= 255u8;
     let ciphertext = v1_token_encrypt(
         ec_kid.as_bytes().to_vec(),
         ss_kid_pk,
         es_kid_pk,
-        method_name.to_vec(),
-        token_hash.to_vec(),
         key_id,
+        token_hash,
     ).unwrap();
 
     let ec_kid_pk = PublicKey::from(&ec_kid).as_bytes().to_vec();
