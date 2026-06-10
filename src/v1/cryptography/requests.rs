@@ -1,3 +1,4 @@
+use std::os::unix::raw::time_t;
 use std::time::{SystemTime, UNIX_EPOCH};
 use aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
@@ -44,6 +45,7 @@ fn v1_requests_encrypt(
     ss_kid: &[u8],
     es: &[u8],
     method_name: &[u8],
+    payload: Option<Vec<u8>>
 ) -> Result<RequestPayload, V1CryptographicError> {
 
     let ec_pk: [u8; 32] = ec_pk.try_into().expect("ec_pk should be 32 bytes");
@@ -67,7 +69,15 @@ fn v1_requests_encrypt(
         .expect("time should go forward")
         .as_secs();
 
-    let request_string = [method_name, timestamp.to_le_bytes().as_slice()].concat();
+    let method_len = method_name.len() as u8;
+    let mut request_string: Vec<u8> = Vec::new();
+    request_string.push(method_len);
+    request_string.extend(method_name);
+    request_string.extend(timestamp.to_le_bytes());
+    if payload.is_some() {
+        request_string.extend(payload.unwrap())
+    }
+
     let payload = Payload {
         msg: request_string.as_slice(),
         aad: associated_data.as_slice(),
@@ -127,8 +137,15 @@ fn v1_requests_decrypt(
 
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
         .expect("Aes256Gcm::new_from_slice failed");
+
     match cipher.decrypt(&nonce, payload) {
-        Ok(ciphertext) => Ok(ciphertext.to_vec()),
+        Ok(ciphertext) => {
+            let length = ciphertext[0];
+            let timestamp_len = 8;
+            let total_len = 1 + length + timestamp_len;
+            let payload = &ciphertext[total_len as usize..];
+            Ok(payload.to_vec())
+        },
         Err(e) => Err(V1CryptographicError::FailedToEncrypt {
             err: e.to_string(),
         })
@@ -148,14 +165,15 @@ fn test_request_encryption_decryption() {
     let es_kid = StaticSecret::from(rng);
 
     let method_name= b"/send";
+    let payload: [u8; 64] = rand::rng().random();
+
     let ciphertext = v1_requests_encrypt(
         ec_kid_pk.to_bytes().as_slice(),
         ss_kid.to_bytes().as_slice(),
         es_kid.to_bytes().as_slice(),
         method_name.as_slice(),
+        Some(payload.to_vec()),
     ).unwrap();
-    let request_string = [method_name,
-        ciphertext.timestamp.to_le_bytes().as_slice()].concat();
 
     let es_kid_pk = PublicKey::from(&es_kid);
     let ss_kid_pk = PublicKey::from(&ss_kid);
@@ -166,5 +184,22 @@ fn test_request_encryption_decryption() {
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
 
-    assert_eq!(request_string.to_vec(), decrypted);
+    assert_eq!(payload.to_vec(), decrypted);
+
+    let ciphertext = v1_requests_encrypt(
+        ec_kid_pk.to_bytes().as_slice(),
+        ss_kid.to_bytes().as_slice(),
+        es_kid.to_bytes().as_slice(),
+        method_name.as_slice(),
+        None
+    ).unwrap();
+
+    let decrypted = v1_requests_decrypt(
+        ec_kid.to_bytes().as_slice(),
+        ss_kid_pk.as_bytes(),
+        es_kid_pk.as_bytes(),
+        ciphertext.ciphertext.as_slice(),
+    ).unwrap();
+
+    assert!(decrypted.is_empty());
 }
