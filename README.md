@@ -20,15 +20,20 @@ make kotlin
 ```
 
 ## Implementation
-### Authentication
+### GRPC HEADER
 ```rust
+struct RequestPayload {
+    pub ciphertext: Vec<u8>,
+    pub timestamp: u64
+}
+
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-let cipher_token = v1_token_encrypt(...)
+let payload: RequesetPayload = v1_requests_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let token_hash = v1_token_decrypt(...)
+let _ = v1_token_decrypt(payload.ciphertext)
 ```
 
 ### OAuth URL
