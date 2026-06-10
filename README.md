@@ -20,7 +20,7 @@ make kotlin
 ```
 
 ## Implementation
-### GRPC HEADER
+### GRPC Requests
 ```rust
 struct RequestPayload {
     pub ciphertext: Vec<u8>,
@@ -34,6 +34,17 @@ let payload: RequesetPayload = v1_requests_encrypt(...)
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
 let _ = v1_requests_decrypt(payload.ciphertext)
+```
+
+### Tokens
+```rust
+// Get token
+// Returns `FailedToEncrypt` in cases cannot decrypt
+let ciphertext = v1_token_encrypt(...)
+
+// Verify token
+// Returns `FailedToDecrypt` in cases cannot decrypt
+let token = v1_token_decrypt(...)
 ```
 
 ### Platform publisher
