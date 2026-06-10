@@ -39,7 +39,7 @@ struct RequestPayload {
 
 
 #[uniffi::export]
-fn requests_encrypt(
+fn v1_requests_encrypt(
     ec_pk: &[u8],
     ss_kid: &[u8],
     es: &[u8],
@@ -93,7 +93,7 @@ fn requests_encrypt(
 
 
 #[uniffi::export]
-fn requests_decrypt(
+fn v1_requests_decrypt(
     ec_kid: &[u8],
     ss_kid_pk: &[u8],
     es_kid_pk: &[u8],
@@ -148,7 +148,7 @@ fn test_request_encryption_decryption() {
     let es_kid = StaticSecret::from(rng);
 
     let method_name= b"/send";
-    let ciphertext = requests_encrypt(
+    let ciphertext = v1_requests_encrypt(
         ec_kid_pk.to_bytes().as_slice(),
         ss_kid.to_bytes().as_slice(),
         es_kid.to_bytes().as_slice(),
@@ -159,7 +159,7 @@ fn test_request_encryption_decryption() {
 
     let es_kid_pk = PublicKey::from(&es_kid);
     let ss_kid_pk = PublicKey::from(&ss_kid);
-    let decrypted = requests_decrypt(
+    let decrypted = v1_requests_decrypt(
         ec_kid.to_bytes().as_slice(),
         ss_kid_pk.as_bytes(),
         es_kid_pk.as_bytes(),
