@@ -40,22 +40,22 @@ let _ = v1_requests_decrypt(payload.ciphertext)
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_platform_publisher_encrypt(...)
+let ciphertext = v1_token_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let payload = v1_platform_publisher_decrypt(...)
+let token = v1_token_decrypt(...)
 ```
 
 ### Platform publisher
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_token_encrypt(...)
+let ciphertext = v1_platform_publisher_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let token = v1_token_decrypt(...)
+let payload = v1_platform_publisher_decrypt(...)
 ```
 
 ### Bridge publisher (online first)
