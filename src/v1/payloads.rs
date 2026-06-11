@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
 use crate::v1::contents::email::V1Emails;
@@ -53,6 +54,12 @@ pub enum V1PayloadsError {
     
     #[error("Content serialization error")]
     ContentSerializationError,
+
+    #[error("Payload serialization error")]
+    PayloadSerializationError,
+
+    #[error("Payload deserialization error")]
+    PayloadDeserializationError,
 
     #[error("Missing device ID")]
     MissingDeviceID,
@@ -110,7 +117,7 @@ pub enum V1PayloadsError {
     SerializerNeedsSessionId,
 }
 
-#[derive(Debug, uniffi::Object)]
+#[derive(Debug, uniffi::Object, Serialize, Deserialize)]
 pub struct V1Payloads {
     // contents: Arc<dyn V1Contents>, // cannot handle encrypted payload
     contents: Vec<u8>, // encrypted payload should go here
@@ -159,6 +166,21 @@ impl V1Payloads {
             t_id,
             sess_id,
         })
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        match serde_json::to_vec(&self) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(V1PayloadsError::PayloadSerializationError)
+        }
+    }
+
+    #[uniffi::constructor]
+    pub fn deserialize(bytes: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice::<V1Payloads>(&bytes) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(V1PayloadsError::PayloadSerializationError)
+        }
     }
 
     pub fn serialize_with_attachment(&self) -> Result<Vec<u8>> {
@@ -418,4 +440,52 @@ fn test_payload_with_attachments() {
 
     let joined = V1Payloads::join(split).unwrap();
     assert_eq!(payload_att, joined)
+}
+
+#[test]
+fn test_serialization() {
+    let att = rand::random::<[u8; (140*10)]>().to_vec();
+    let len_att = att.len() as u16;
+
+    let to  = b"example@gmail.com"; //2
+    let body = b"Here is some heavy Lorem Ipsum shit"; //4
+    let subject = b"More things"; //7
+    let sess_id: u8 = 15;
+    let k_id: u8 = 13;
+    let t_id: Option<u32> = Option::from(255);
+
+
+    let cat_id = V1ContentCategories::Message;
+    let contents = V1ContentsContainer::new(
+        cat_id.clone(),
+        body.to_vec(),
+        Some(to.to_vec()),
+        Some(subject.to_vec()),
+        Some(att)
+    );
+
+    let payload_att = V1Payloads::new(
+        contents.serialize().unwrap(),
+        k_id,
+        len_att,
+        // t_id,
+        None,
+        Some(sess_id)
+    ).unwrap();
+    let serialized = payload_att.serialize().unwrap();
+    let deserialized = V1Payloads::deserialize(serialized).unwrap();
+    assert_eq!(payload_att, deserialized);
+
+
+    let payload_att = V1Payloads::new(
+        contents.serialize().unwrap(),
+        k_id,
+        len_att,
+        t_id,
+        Some(sess_id)
+    ).unwrap();
+
+    let serialized = payload_att.serialize().unwrap();
+    let deserialized = V1Payloads::deserialize(serialized).unwrap();
+    assert_eq!(payload_att, deserialized);
 }

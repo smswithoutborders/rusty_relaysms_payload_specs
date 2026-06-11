@@ -1,10 +1,12 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use crate::AsAny;
 use crate::v1::contents::email::V1Emails;
 use crate::v1::contents::message::V1Messages;
 use crate::v1::contents::text::V1Text;
+use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 
 pub mod email;
 pub mod message;
@@ -12,7 +14,7 @@ pub mod text;
 
 type Result<T> = std::result::Result<T, V1ContentError>;
 
-#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
+#[derive(uniffi::Enum, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum V1ContentCategories {
     Email = 0x0,
@@ -71,6 +73,12 @@ pub enum V1ContentError {
 
     #[error("Invalid category id")]
     InvalidCategory,
+
+    #[error("Error serializing for storage")]
+    ErrorSerializingForStorage,
+
+    #[error("Error deserializing for storage")]
+    ErrorDeserializingForStorage,
 }
 
 
@@ -79,7 +87,7 @@ pub trait V1Contents: Debug + Send + Sync {
     fn serialize(&self) -> Result<Vec<u8>>;
 }
 
-#[derive(PartialEq, Debug, uniffi::Object)]
+#[derive(PartialEq, Debug, uniffi::Object, Serialize, Deserialize)]
 pub struct V1ContentsContainer {
     cat_id: V1ContentCategories,
     body: Vec<u8>,
@@ -110,6 +118,21 @@ impl V1ContentsContainer {
             to,
             subject,
             attachment
+        }
+    }
+
+    pub fn serialize_for_storage(&self) -> Result<Vec<u8>> {
+        match serde_json::to_vec(&self) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(V1ContentError::ErrorSerializingForStorage)
+        }
+    }
+
+    #[uniffi::constructor]
+    pub fn deserialize_from_storage(bytes: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice::<V1ContentsContainer>(&bytes) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(V1ContentError::ErrorDeserializingForStorage)
         }
     }
 
@@ -199,4 +222,32 @@ impl V1ContentsContainer {
             }
         }
     }
+}
+
+#[test]
+fn test_serialization_for_storage() {
+    let att = rand::random::<[u8; (140*10)]>().to_vec();
+    let len_att = att.len() as u16;
+
+    let to  = b"example@gmail.com"; //2
+    let body = b"Here is some heavy Lorem Ipsum shit"; //4
+    let subject = b"More things"; //7
+    let sess_id: u8 = 15;
+    let k_id: u8 = 13;
+    let t_id: Option<u32> = Option::from(255);
+
+
+    let cat_id = V1ContentCategories::Message;
+    let contents = V1ContentsContainer::new(
+        cat_id.clone(),
+        body.to_vec(),
+        Some(to.to_vec()),
+        Some(subject.to_vec()),
+        Some(att)
+    );
+
+    let serialized = contents.serialize_for_storage().unwrap();
+    let deserialized = V1ContentsContainer::deserialize_from_storage(
+        serialized).unwrap();
+    assert_eq!(deserialized, contents);
 }
