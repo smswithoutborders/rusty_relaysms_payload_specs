@@ -90,6 +90,12 @@ fn v1_requests_encrypt(
     }
 }
 
+#[derive(PartialEq, Debug, uniffi::Record)]
+struct ResponsePayload {
+    pub method_name: Vec<u8>,
+    pub payload: Vec<u8>,
+}
+
 
 #[uniffi::export]
 fn v1_requests_decrypt(
@@ -97,7 +103,7 @@ fn v1_requests_decrypt(
     ec_pk: &[u8],
     nonce: Vec<u8>,
     ciphertext: &[u8],
-) -> Result<Vec<u8>, V1CryptographicError> {
+) -> Result<ResponsePayload, V1CryptographicError> {
     let ss_kid: [u8; 32] = ss_kid.try_into().expect("ss_kid should be 32 bytes");
     let ss_kid = StaticSecret::from(ss_kid);
     let ss_kid_pk = PublicKey::from(&ss_kid);
@@ -128,8 +134,12 @@ fn v1_requests_decrypt(
             let length = ciphertext[0];
             let timestamp_len = 8;
             let total_len = 1 + length + timestamp_len;
+            let method_name = &ciphertext[1..(1+ length) as usize];
             let payload = &ciphertext[total_len as usize..];
-            Ok(payload.to_vec())
+            Ok(ResponsePayload {
+                method_name: method_name.to_vec(),
+                payload: payload.to_vec(),
+            })
         },
         Err(e) => Err(V1CryptographicError::FailedToDecrypt {
             err: e.to_string(),
@@ -164,7 +174,8 @@ fn test_request_encryption_decryption() {
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
 
-    assert_eq!(payload.to_vec(), decrypted);
+    assert_eq!(payload.to_vec(), decrypted.payload);
+    assert_eq!(method_name.to_vec(), decrypted.method_name);
 
     let ciphertext = v1_requests_encrypt(
         ec_kid.to_bytes().as_slice(),
@@ -180,5 +191,6 @@ fn test_request_encryption_decryption() {
         ciphertext.ciphertext.as_slice(),
     ).unwrap();
 
-    assert!(decrypted.is_empty());
+    assert!(decrypted.payload.is_empty());
+    assert_eq!(method_name.to_vec(), decrypted.method_name);
 }
