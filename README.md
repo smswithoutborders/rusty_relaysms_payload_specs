@@ -33,6 +33,10 @@ let payload: RequesetPayload = v1_requests_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
+/* struct ResponsePayload {
+    pub method_name: Vec<u8>,
+    pub payload: Vec<u8>,
+} */
 let _ = v1_requests_decrypt(payload.ciphertext)
 ```
 
@@ -44,7 +48,7 @@ let ciphertext = v1_token_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let token = v1_token_decrypt(...)
+let token: ResponsePayload = v1_token_decrypt(...)
 ```
 
 ### Platform publisher
