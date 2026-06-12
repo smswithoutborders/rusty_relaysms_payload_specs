@@ -42,13 +42,22 @@ let _ = v1_requests_decrypt(payload.ciphertext)
 
 ### Tokens
 ```rust
-// Get token
+// Server
+// Returns `FailedToEncrypt` in cases cannot decrypt
+let ciphertext = v1_token_encrypt_server(...)
+
+// Returns `FailedToDecrypt` in cases cannot decrypt
+let token = v1_token_decrypt_server(...)
+```
+
+```rust
+// Client
 // Returns `FailedToEncrypt` in cases cannot decrypt
 let ciphertext = v1_token_encrypt(...)
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
-let token: ResponsePayload = v1_token_decrypt(...)
+let token = v1_token_decrypt(...)
 ```
 
 ### Platform publisher
