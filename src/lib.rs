@@ -1,8 +1,9 @@
 use std::any::Any;
-use std::fmt::Debug;
-use crate::email::Emails;
 
-pub fn add(left: u64, right: u64) -> u64 {
+
+
+#[uniffi::export]
+pub fn add_rust(left: u64, right: u64) -> u64 {
     left + right
 }
 
@@ -13,31 +14,24 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
+        let result = add_rust(2, 2);
         assert_eq!(result, 4);
     }
 }
 
-pub mod email;
 pub mod bit_utils;
-pub mod transport;
+pub mod utils;
+pub mod v1;
 
-
-#[derive(Debug)]
-pub enum ContentError {
-    InconsistentSubjectIndicator,
-    FromIdTooLarge,
-    SubjectLenTooLarge,
-    ToTooLarge,
-    BitParsingError,
-    InvalidUtf8
-}
-pub trait Contents : Debug {
-    fn serialize(&self) -> Result<Vec<u8>, ContentError>;
-    fn deserialize(data: &[u8]) -> Result<Emails, ContentError>
-    where Self: Sized;
-
-    fn equals(&self, other: &dyn Contents) -> bool;
-
+pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
 }
+
+// Blanket impl so everything gets it for free
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+uniffi::setup_scaffolding!();  // ← replaces the UDL file
