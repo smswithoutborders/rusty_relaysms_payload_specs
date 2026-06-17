@@ -8,7 +8,8 @@ use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, SessionIdTooLarge};
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
-pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 9;
+pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 5;
+pub const ATTACHMENT_SEG_O_TID_HEADER_SIZE: u8 = 9;
 pub const ATTACHMENT_SEG_N_HEADER_SIZE: u8 = 3;
 
 // #[derive(Debug, PartialEq, uniffi::Object)]

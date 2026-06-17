@@ -22,7 +22,7 @@ pub enum Transports {
 impl Transports {
     pub fn get_max_payload_size(&self) -> u32{
         match self {
-            Transports::Sms => 104,
+            Transports::Sms => 160,
         }
     }
 }

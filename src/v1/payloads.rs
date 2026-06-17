@@ -1,6 +1,10 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
+use base64::Engine;
+use base64::engine::general_purpose;
+use base64::engine::general_purpose::STANDARD;
+use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
@@ -9,7 +13,7 @@ use crate::v1::contents::{V1ContentCategories, V1ContentError, V1ContentVariatio
 use crate::v1::contents::message::V1Messages;
 use crate::v1::contents::text::V1Text;
 use crate::v1::get_version;
-use crate::v1::payloads::payload_with_attachments::{V1PayloadWithAttachmentsHeader, V1PayloadWithAttachmentsNoHeader, ATTACHMENT_SEG_N_HEADER_SIZE, ATTACHMENT_SEG_O_HEADER_SIZE};
+use crate::v1::payloads::payload_with_attachments::{V1PayloadWithAttachmentsHeader, V1PayloadWithAttachmentsNoHeader, ATTACHMENT_SEG_N_HEADER_SIZE, ATTACHMENT_SEG_O_HEADER_SIZE, ATTACHMENT_SEG_O_TID_HEADER_SIZE};
 use crate::v1::payloads::payload_without_attachment::V1PayloadWithoutAttachments;
 use crate::v1::payloads::V1PayloadsError::PayloadTooLarge;
 use crate::v1::transports::{Transports};
@@ -137,6 +141,13 @@ impl PartialEq for V1Payloads {
     }
 }
 
+#[derive(uniffi::Enum, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum V1PayloadsTypes {
+    WithoutAttachment = 0x0,
+    WithAttachmentHeader = 0x1,
+    WithAttachmentNoHeader = 0x2,
+}
 
 #[uniffi::export]
 impl V1Payloads {
@@ -262,8 +273,12 @@ impl V1Payloads {
             content.extend(seg_n.get_payload());
         };
 
+        let mut payload = Vec::<u8>::new();
+        BASE64_STANDARD.decode_vec(content, &mut payload)
+            .expect("Payload should be able to decode");
+
         V1Payloads::new(
-            content,
+            payload,
             seg_0.get_k_id(),
             seg_0.get_len_att(),
             seg_0.get_t_id(),
@@ -271,12 +286,18 @@ impl V1Payloads {
         )
     }
 
-    pub fn split( &self, transport: Transports) -> Result<Vec<Vec<u8>>> {
+    pub fn split(&self, transport: Transports) -> Result<Vec<Vec<u8>>> {
         let max_transport_payload_size = transport.get_max_payload_size();
         let max_payload_size: u8 = u8::try_from(max_transport_payload_size).unwrap_or(u8::MAX);
-        let max_value = max_payload_size - ATTACHMENT_SEG_O_HEADER_SIZE;
+        let max_value = if self.t_id.is_some() {
+            max_payload_size - ATTACHMENT_SEG_O_TID_HEADER_SIZE
+        } else {
+            max_payload_size - ATTACHMENT_SEG_O_HEADER_SIZE
+        };
 
-        let items = utils::take_n_from(&self.contents, 0, max_value as usize);
+        let payload = STANDARD.encode(&self.contents).clone();
+
+        let items = utils::take_n_from(payload.clone().as_bytes(), 0, max_value as usize);
         let mut start_index: usize = items.len();
         if items.len() as u8 > max_value {
             return Err(PayloadTooLarge {
@@ -303,8 +324,9 @@ impl V1Payloads {
 
         let mut seg_num :u8 = 1;
         let max_value = max_payload_size - ATTACHMENT_SEG_N_HEADER_SIZE;
-        while start_index < self.contents.len() {
-            let items = utils::take_n_from(&self.contents, start_index, max_value as usize);
+        while start_index < payload.len() {
+            let items = utils::take_n_from(
+                payload.clone().as_bytes(), start_index, max_value as usize);
             if items.len() as u8 > max_value {
                 return Err(PayloadTooLarge {
                     current: items.len() as i32,
@@ -331,6 +353,35 @@ impl V1Payloads {
 
         Ok(payloads)
     }
+
+}
+
+#[uniffi::export]
+pub fn v1_get_payload_session_id(data: &[u8]) -> Result<u8> {
+    Ok(match bit_utils::bit_wrap(
+        &data[0], 5, &data[1], 3) {
+        Ok(s) => s,
+        Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
+    })
+}
+
+
+#[uniffi::export]
+pub fn v1_get_payload_type(data: &[u8]) -> Result<V1PayloadsTypes> {
+    let i_att = bit_utils::is_bit_on(&data[0], 4);
+    let seg_num: u8 = match bit_utils::bit_wrap(
+        &data[1], 4, &data[2], 3) {
+        Ok(s) => s,
+        Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
+    };
+    if i_att {
+        return if seg_num > 0 {
+            Ok(V1PayloadsTypes::WithAttachmentNoHeader)
+        } else {
+            Ok(V1PayloadsTypes::WithAttachmentHeader)
+        }
+    }
+    Ok(V1PayloadsTypes::WithoutAttachment)
 }
 
 #[test]
@@ -359,8 +410,12 @@ fn test_payload_without_attachments() {
     ).unwrap();
 
     let serialized = transport_att_false.serialize_without_attachment().unwrap();
+    let t = v1_get_payload_type(serialized.as_slice()).unwrap();
+    assert_eq!(V1PayloadsTypes::WithoutAttachment, t);
+
     let deserialized = V1Payloads::deserialize_without_attachment(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
+
 
     let content = V1ContentsContainer::deserialize(
         deserialized.get_payload().as_slice(), cat_id.clone(), 0).unwrap();
@@ -384,6 +439,9 @@ fn test_payload_without_attachments() {
     ).unwrap();
 
     let serialized = transport_att_false.serialize_without_attachment().unwrap();
+    let t = v1_get_payload_type(serialized.as_slice()).unwrap();
+    assert_eq!(V1PayloadsTypes::WithoutAttachment, t);
+
     let deserialized = V1Payloads::deserialize_without_attachment(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
 
@@ -424,6 +482,25 @@ fn test_payload_with_attachments() {
     ).unwrap();
 
     let split = payload_att.split(Transports::Sms).unwrap();
+    let max_size = Transports::Sms.get_max_payload_size() + ATTACHMENT_SEG_O_HEADER_SIZE as u32;
+    let max_size_n = Transports::Sms.get_max_payload_size() + ATTACHMENT_SEG_N_HEADER_SIZE as u32;
+    assert_eq!(160, split[0].len() as u32);
+    assert_eq!(160, split[1].len() as u32);
+    // assert_eq!(138, split[2].len() as u32);
+
+    // let split_0 = BASE64_STANDARD.decode(&split[0]).unwrap();
+    let t = v1_get_payload_type(split[0].as_slice()).unwrap();
+    assert_eq!(V1PayloadsTypes::WithAttachmentHeader, t);
+
+    // let split_1 = BASE64_STANDARD.decode(&split[1]).unwrap();
+    let t = v1_get_payload_type(split[1].as_slice()).unwrap();
+    assert_eq!(V1PayloadsTypes::WithAttachmentNoHeader, t);
+
+    let s = v1_get_payload_session_id(split[0].as_slice()).unwrap();
+    assert_eq!(sess_id, s);
+
+    let s = v1_get_payload_session_id(split[1].as_slice()).unwrap();
+    assert_eq!(sess_id, s);
 
     let joined = V1Payloads::join(split).unwrap();
     assert_eq!(payload_att, joined);
@@ -473,6 +550,8 @@ fn test_serialization() {
         Some(sess_id)
     ).unwrap();
     let serialized = payload_att.serialize().unwrap();
+
+
     let deserialized = V1Payloads::deserialize(serialized).unwrap();
     assert_eq!(payload_att, deserialized);
 
