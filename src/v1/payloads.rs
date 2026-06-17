@@ -151,7 +151,7 @@ pub enum V1PayloadsTypes {
 
 #[uniffi::export]
 impl V1Payloads {
-    pub fn get_payload(&self) -> Vec<u8> { self.contents.clone() }
+    pub fn get_content(&self) -> Vec<u8> { self.contents.clone() }
     pub fn get_kid(&self) -> u8 { self.k_id }
     pub fn get_len_att(&self) -> u16 { self.len_att }
     pub fn get_t_id(&self) -> Option<u32> { self.t_id }
@@ -418,7 +418,7 @@ fn test_payload_without_attachments() {
 
 
     let content = V1ContentsContainer::deserialize(
-        deserialized.get_payload().as_slice(), cat_id.clone(), 0).unwrap();
+        deserialized.get_content().as_slice(), cat_id.clone(), 0).unwrap();
     assert_eq!(contents, content);
 
     // No token id
@@ -446,7 +446,7 @@ fn test_payload_without_attachments() {
     assert_eq!(Arc::new(transport_att_false), deserialized);
 
     let content = V1ContentsContainer::deserialize(
-        deserialized.get_payload().as_slice(), cat_id, 0).unwrap();
+        deserialized.get_content().as_slice(), cat_id, 0).unwrap();
     assert_eq!(contents, content);
 }
 
