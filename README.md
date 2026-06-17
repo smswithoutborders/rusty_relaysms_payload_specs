@@ -152,7 +152,7 @@ if t == V1PayloadsTypes::WithoutAttachment {
 }
 ```
 
-### Publishing (without Attachments)
+### Publishing (with Attachments)
 ```rust
 
 // example message
