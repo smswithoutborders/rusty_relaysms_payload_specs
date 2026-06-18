@@ -30,7 +30,7 @@ impl V1PayloadWithoutAttachments {
         t_id: Option<u32>,
         payload: &[u8],
     ) -> Result<Arc<Self>> {
-        if k_id > (2u8.pow(4) - 1) {
+        if k_id > (2u8.pow(8) - 1) {
             return Err(KeyIdTooLarge);
         }
 

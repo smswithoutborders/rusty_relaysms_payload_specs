@@ -300,7 +300,7 @@ impl V1Payloads {
 
         let min_take_for_base64 = calculate_b64_min_size(max_payload_size as usize) as u8;
 
-        let items = utils::take_n_from(
+        let (items, left) = utils::take_n_from(
             &self.contents, 0, min_take_for_base64 as usize - header as usize);
         let mut start_index: usize = items.len();
         if items.len() as u8 > max_payload_size {
@@ -330,7 +330,7 @@ impl V1Payloads {
         let mut seg_num :u8 = 1;
 
         while start_index < self.contents.len() {
-            let items = utils::take_n_from(
+            let (items, left) = utils::take_n_from(
                 &self.contents, start_index,
                 min_take_for_base64 as usize - ATTACHMENT_SEG_N_HEADER_SIZE as usize
             );
