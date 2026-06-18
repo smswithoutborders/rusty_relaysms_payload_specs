@@ -60,17 +60,6 @@ let ciphertext = v1_token_encrypt(...)
 let token = v1_token_decrypt(...)
 ```
 
-### Platform publisher
-```rust
-// Get token
-// Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_platform_publisher_encrypt(...)
-
-// Verify token
-// Returns `FailedToDecrypt` in cases cannot decrypt
-let payload = v1_platform_publisher_decrypt(...)
-```
-
 ### Bridge publisher (online first)
 ```rust
 // Get token
@@ -131,3 +120,78 @@ let joined = V1Payloads::join(split, V1ContentCategories::Message)
 ...//
 // Joined can be parsed to either platform or bridge for publishing
 ```
+
+### Publishing (without Attachments)
+```rust
+
+// example message
+ let contents = V1ContentsContainer(
+      V1ContentCategories::Message,
+      body,
+      to,
+      subject,
+      attachment
+  );
+
+  let payload_att = V1Payloads(
+      contents.serialize(),
+      k_id,
+      len_att,
+      t_id,
+      sess_id
+  );
+
+// For sending
+let payload = payload_att.serialize_without_attachment().unwrap();
+
+// For receiving
+let t = V1Payloads::get_types(payload)
+if t == V1PayloadsTypes::WithoutAttachment {
+  let v1_payload = V1Payloads::deserialize_without_attachment();
+  let content = V1ContentContainer::deserialize(v1_payload.get_content());
+}
+```
+
+### Publishing (with Attachments)
+```rust
+
+// example message
+ let contents = V1ContentsContainer(
+      V1ContentCategories::Message,
+      body,
+      to,
+      subject,
+      attachment
+  );
+
+  let payload_att = V1Payloads(
+      contents.serialize(),
+      k_id,
+      len_att,
+      t_id,
+      sess_id
+  );
+
+// For sending
+let payload = payload_att.serialize_With_attachment().unwrap();
+
+if t == V1PayloadsTypes::WithAttachmentHeader {
+  // first segment with attachment
+  // session id
+  let session_id = V1PayloadsTypes::get_session_id(payload)
+  ...
+}
+
+else if t == V1PayloadsTypes::WithAttachmentNoHeader {
+  // nth segment with attachment
+  // session id
+  let session_id = V1PayloadsTypes::get_session_id(payload)
+  ...
+}
+
+...
+// for all session payload
+let v1_payload = V1PayloadsTypes::join([payloads])
+let content = V1ContentContainer::deserialize(v1_payload.get_content());
+```
+
