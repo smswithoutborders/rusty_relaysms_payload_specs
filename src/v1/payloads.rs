@@ -1,13 +1,14 @@
 use std::any::Any;
+use std::cmp::max;
 use std::fmt::Debug;
+use std::ops::Div;
 use std::sync::Arc;
 use base64::Engine;
-use base64::engine::general_purpose;
-use base64::engine::general_purpose::STANDARD;
-use base64::prelude::*;
+use base64::prelude::BASE64_STANDARD;
 use serde::{Deserialize, Serialize};
 use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
+use crate::utils::{calculate_b64_min_size};
 use crate::v1::contents::email::V1Emails;
 use crate::v1::contents::{V1ContentCategories, V1ContentError, V1ContentVariation, V1Contents, V1ContentsContainer};
 use crate::v1::contents::message::V1Messages;
@@ -249,8 +250,10 @@ impl V1Payloads {
 
     #[uniffi::constructor]
     pub fn join(payload: Vec<Vec<u8>>) -> Result<V1Payloads> {
+        let seg_0 = BASE64_STANDARD.decode(&payload[0])
+            .expect("Payload should be able to decode");
         let seg_0 =
-            match V1PayloadWithAttachmentsHeader::deserialize(&payload[0]) {
+            match V1PayloadWithAttachmentsHeader::deserialize(seg_0.as_slice()) {
                 Ok(T) => T,
                 Err(T) => return Err(T),
             };
@@ -258,8 +261,10 @@ impl V1Payloads {
         let mut content = seg_0.get_content();
         let sess_id = seg_0.get_sess_id();
         for i in 1..payload.len() {
+            let seg_n = BASE64_STANDARD.decode(&payload[i])
+                .expect("Payload should be able to decode");
             let seg_n =
-                match V1PayloadWithAttachmentsNoHeader::deserialize(&payload[i]) {
+                match V1PayloadWithAttachmentsNoHeader::deserialize(seg_n.as_slice()) {
                     Ok(T) => T,
                     Err(T) => return Err(T),
                 };
@@ -273,12 +278,8 @@ impl V1Payloads {
             content.extend(seg_n.get_payload());
         };
 
-        let mut payload = Vec::<u8>::new();
-        BASE64_STANDARD.decode_vec(content, &mut payload)
-            .expect("Payload should be able to decode");
-
         V1Payloads::new(
-            payload,
+            content,
             seg_0.get_k_id(),
             seg_0.get_len_att(),
             seg_0.get_t_id(),
@@ -287,22 +288,25 @@ impl V1Payloads {
     }
 
     pub fn split(&self, transport: Transports) -> Result<Vec<Vec<u8>>> {
+        // TODO(There's a risk here with minus overflow if data is less than header)
+        // TODO(Check for the risk above)
         let max_transport_payload_size = transport.get_max_payload_size();
         let max_payload_size: u8 = u8::try_from(max_transport_payload_size).unwrap_or(u8::MAX);
-        let max_value = if self.t_id.is_some() {
-            max_payload_size - ATTACHMENT_SEG_O_TID_HEADER_SIZE
+        let header: u8 = if self.t_id.is_some() {
+            ATTACHMENT_SEG_O_TID_HEADER_SIZE
         } else {
-            max_payload_size - ATTACHMENT_SEG_O_HEADER_SIZE
+            ATTACHMENT_SEG_O_HEADER_SIZE
         };
 
-        let payload = STANDARD.encode(&self.contents).clone();
+        let min_take_for_base64 = calculate_b64_min_size(max_payload_size as usize) as u8;
 
-        let items = utils::take_n_from(payload.clone().as_bytes(), 0, max_value as usize);
+        let items = utils::take_n_from(
+            &self.contents, 0, min_take_for_base64 as usize - header as usize);
         let mut start_index: usize = items.len();
-        if items.len() as u8 > max_value {
+        if items.len() as u8 > max_payload_size {
             return Err(PayloadTooLarge {
                 current: items.len() as i32,
-                max: max_value,
+                max: max_payload_size,
                 seg_num: 0
             })
         }
@@ -318,16 +322,19 @@ impl V1Payloads {
             Err(e) => { return Err(V1PayloadsError::from(e)); }
         };
         let seg_0 = payload_seg_0.serialize().expect("seg 0 should be serializable");
-
+        let seg_0 = BASE64_STANDARD.encode(seg_0);
         let mut payloads: Vec<Vec<u8>> = Vec::new();
-        payloads.push(seg_0);
+
+        payloads.push(seg_0.as_bytes().to_vec());
 
         let mut seg_num :u8 = 1;
-        let max_value = max_payload_size - ATTACHMENT_SEG_N_HEADER_SIZE;
-        while start_index < payload.len() {
+
+        while start_index < self.contents.len() {
             let items = utils::take_n_from(
-                payload.clone().as_bytes(), start_index, max_value as usize);
-            if items.len() as u8 > max_value {
+                &self.contents, start_index,
+                min_take_for_base64 as usize - ATTACHMENT_SEG_N_HEADER_SIZE as usize
+            );
+            if items.len() as u8 > max_payload_size {
                 return Err(PayloadTooLarge {
                     current: items.len() as i32,
                     max: max_payload_size,
@@ -347,13 +354,12 @@ impl V1Payloads {
                     Err(e) => { return Err(V1PayloadsError::from(e)); }
                 };
             let seg_n = payload_seg_n.serialize().expect("seg n should be serializable");
-            payloads.push(seg_n);
+            let seg_n = BASE64_STANDARD.encode(seg_n);
+            payloads.push(seg_n.as_bytes().to_vec());
             seg_num += 1;
         }
-
         Ok(payloads)
     }
-
 }
 
 #[uniffi::export]
@@ -482,24 +488,21 @@ fn test_payload_with_attachments() {
     ).unwrap();
 
     let split = payload_att.split(Transports::Sms).unwrap();
-    let max_size = Transports::Sms.get_max_payload_size() + ATTACHMENT_SEG_O_HEADER_SIZE as u32;
-    let max_size_n = Transports::Sms.get_max_payload_size() + ATTACHMENT_SEG_N_HEADER_SIZE as u32;
     assert_eq!(160, split[0].len() as u32);
     assert_eq!(160, split[1].len() as u32);
-    // assert_eq!(138, split[2].len() as u32);
 
-    // let split_0 = BASE64_STANDARD.decode(&split[0]).unwrap();
-    let t = v1_get_payload_type(split[0].as_slice()).unwrap();
+    let seg_0 = BASE64_STANDARD.decode(&split[0]).unwrap();
+    let t = v1_get_payload_type(seg_0.as_slice()).unwrap();
     assert_eq!(V1PayloadsTypes::WithAttachmentHeader, t);
 
-    // let split_1 = BASE64_STANDARD.decode(&split[1]).unwrap();
-    let t = v1_get_payload_type(split[1].as_slice()).unwrap();
+    let seg_n = BASE64_STANDARD.decode(&split[1]).unwrap();
+    let t = v1_get_payload_type(seg_n.as_slice()).unwrap();
     assert_eq!(V1PayloadsTypes::WithAttachmentNoHeader, t);
 
-    let s = v1_get_payload_session_id(split[0].as_slice()).unwrap();
+    let s = v1_get_payload_session_id(seg_0.as_slice()).unwrap();
     assert_eq!(sess_id, s);
 
-    let s = v1_get_payload_session_id(split[1].as_slice()).unwrap();
+    let s = v1_get_payload_session_id(seg_n.as_slice()).unwrap();
     assert_eq!(sess_id, s);
 
     let joined = V1Payloads::join(split).unwrap();
