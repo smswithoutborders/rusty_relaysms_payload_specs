@@ -10,7 +10,7 @@ use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
 use crate::utils::{calculate_b64_min_size};
 use crate::v1::contents::email::V1Emails;
-use crate::v1::contents::{V1ContentCategories, V1ContentError, V1ContentVariation, V1Contents, V1ContentsContainer};
+use crate::v1::contents::{V1ContentCategories, V1ContentError, V1Contents, V1ContentsContainer};
 use crate::v1::contents::message::V1Messages;
 use crate::v1::contents::text::V1Text;
 use crate::v1::get_version;
@@ -120,6 +120,9 @@ pub enum V1PayloadsError {
 
     #[error("Serializer needs session id")]
     SerializerNeedsSessionId,
+
+    #[error("Protocol is not supported")]
+    UnsupportedProtocol,
 }
 
 #[derive(Debug, uniffi::Object, Serialize, Deserialize)]
@@ -148,6 +151,22 @@ pub enum V1PayloadsTypes {
     WithoutAttachment = 0x0,
     WithAttachmentHeader = 0x1,
     WithAttachmentNoHeader = 0x2,
+}
+
+#[derive(uniffi::Enum, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[repr(u64)]
+pub enum V1PayloadsSupportedProtocols {
+    OAuth20 = 0,
+    Pnba = 1,
+}
+
+#[uniffi::export]
+pub fn v1_payload_support_protocols_from_u8(value: u8) -> Result<V1PayloadsSupportedProtocols> {
+    match value {
+        0x0 => Ok(V1PayloadsSupportedProtocols::OAuth20),
+        0x1 => Ok(V1PayloadsSupportedProtocols::Pnba),
+        _ => Err(V1PayloadsError::UnsupportedProtocol),
+    }
 }
 
 #[uniffi::export]

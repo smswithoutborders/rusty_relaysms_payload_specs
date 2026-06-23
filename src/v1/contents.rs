@@ -23,13 +23,6 @@ pub enum V1ContentCategories {
     Bridge = 0x3,
 }
 
-#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
-pub enum V1ContentVariation {
-    EMAIL { value: Arc<V1Emails> },
-    MESSAGE { value: Arc<V1Messages> },
-    TEXT { value: Arc<V1Text> },
-}
-
 #[uniffi::export]
 pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories> {
     match value {
@@ -80,7 +73,6 @@ pub enum V1ContentError {
     #[error("Error deserializing for storage")]
     ErrorDeserializingForStorage,
 }
-
 
 #[uniffi::export(with_foreign)]
 pub trait V1Contents: Debug + Send + Sync {

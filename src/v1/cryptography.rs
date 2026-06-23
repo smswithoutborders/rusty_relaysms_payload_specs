@@ -2,6 +2,7 @@ mod platforms;
 mod requests;
 mod tokens;
 mod bridges;
+mod backups;
 
 use aead::{Aead, Payload};
 use aes_gcm::Nonce;
@@ -21,6 +22,9 @@ pub enum V1CryptographicError {
     FailedToEncrypt {
         err: String,
     },
+
+    #[error("Ciphertext is empty")]
+    CiphertextEmpty,
 }
 
 pub fn triple_dh_decryption(
