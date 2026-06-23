@@ -11,8 +11,8 @@ const BACKUP_SALT: &[u8] = b"RelaySMS Export backup";
 
 #[derive(PartialEq, Debug, uniffi::Object, Serialize, Deserialize)]
 pub struct BackupRestore {
-    digit_list: Vec<u8>,
     nonce: Vec<u8>,
+    digit_list: Option<Vec<u8>>,
     ciphertext: Option<Vec<u8>>,
 }
 
@@ -40,7 +40,7 @@ impl BackupRestore {
 
         match cipher.encrypt(&nonce, data) {
             Ok(ciphertext) => Ok(Arc::new(BackupRestore {
-                digit_list,
+                digit_list: Some(digit_list),
                 nonce: nonce.to_vec(),
                 ciphertext: Some(ciphertext),
             })),
@@ -49,14 +49,21 @@ impl BackupRestore {
     }
 
     fn v1_restore_decrypt(&self) -> Result<Vec<u8>, V1CryptographicError> {
+        if self.digit_list.is_none() {
+            return Err(V1CryptographicError::NoDigestFound)
+        }
+
         if self.ciphertext.is_none() {
             return Err(V1CryptographicError::CiphertextEmpty)
         }
 
         let mut chacha_key = [0u8; 32];
         Argon2::default()
-            .hash_password_into(self.digit_list.as_slice(), BACKUP_SALT, &mut chacha_key)
-            .expect("Should be able to hash the digest list");
+            .hash_password_into(
+                self.digit_list.clone().unwrap().as_ref(),
+                BACKUP_SALT,
+                &mut chacha_key
+            ).expect("Should be able to hash the digest list");
 
         let cipher = ChaCha20Poly1305::new_from_slice(&chacha_key)
             .expect("Aes256Gcm::new_from_slice failed");
@@ -66,6 +73,24 @@ impl BackupRestore {
             Ok(ciphertext) => Ok(ciphertext),
             Err(e) => Err(V1CryptographicError::FailedToEncrypt { err: e.to_string() })
         }
+    }
+
+    fn serialize(&self) -> Result<Vec<u8>, V1CryptographicError> {
+        if self.ciphertext.is_none() {
+            return Err(V1CryptographicError::CiphertextEmpty)
+        }
+        Ok([self.nonce.clone(), self.ciphertext.clone().unwrap().to_vec()].concat())
+    }
+
+    #[uniffi::constructor]
+    fn deserialize(data: &[u8], digit_list: Option<Vec<u8>>) -> Result<BackupRestore, V1CryptographicError> {
+        let nonce = data[..12].to_vec();
+        let ciphertext = Some(data[12..].to_vec());
+        Ok(BackupRestore {
+            digit_list,
+            nonce,
+            ciphertext
+        })
     }
 
 }
