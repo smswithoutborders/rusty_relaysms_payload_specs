@@ -18,8 +18,8 @@ pub struct V1PayloadWithAttachmentsHeader {
     version: u8,
     i_tid: bool,
     i_att: bool,
-    seg_num: u8,
     sess_id: u8,
+    seg_num: u8,
     k_id: u8,
     len_att: u16,
     t_id: Option<u32>,
@@ -31,8 +31,9 @@ pub struct V1PayloadWithAttachmentsNoHeader {
     version: u8,
     i_tid: bool,
     i_att: bool,
-    seg_num: u8,
     sess_id: u8,
+    seg_num: u8,
+    i_l: bool,
     content: Vec<u8>
 }
 
@@ -152,6 +153,7 @@ impl V1PayloadWithAttachmentsNoHeader {
         version: u8,
         seg_num: u8,
         sess_id: u8,
+        i_l: bool,
         payload: Vec<u8>
     ) -> Result<Self> {
         if sess_id > (2u8.pow(7) - 1) {
@@ -164,6 +166,7 @@ impl V1PayloadWithAttachmentsNoHeader {
             i_att: true,
             sess_id,
             seg_num,
+            i_l,
             content: payload,
         })
     }
@@ -181,7 +184,8 @@ impl V1PayloadWithAttachmentsNoHeader {
         byte = bit_utils::put_value(&byte, 4, self.seg_num, 4);
         bytes.push(byte);
 
-        let byte = bit_utils::get_bits(&self.seg_num, 4, 7);
+        let mut byte = bit_utils::get_bits(&self.seg_num, 4, 7);
+        if self.i_l { byte = bit_utils::turn_bit_on(&byte, 4) };
         bytes.push(byte);
         bytes.extend(self.content.clone());
 
@@ -202,6 +206,7 @@ impl V1PayloadWithAttachmentsNoHeader {
             Ok(s) => s,
             Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
         };
+        let i_l = bit_utils::is_bit_on(&data[2], 4);
         let payload = data[3..].to_vec();
         Ok(
             V1PayloadWithAttachmentsNoHeader {
@@ -210,6 +215,7 @@ impl V1PayloadWithAttachmentsNoHeader {
                 i_att,
                 sess_id,
                 seg_num,
+                i_l,
                 content: payload
             }
         )

@@ -26,8 +26,8 @@ pub enum V1CryptographicError {
     #[error("Ciphertext is empty")]
     CiphertextEmpty,
 
-    #[error("No digest found")]
-    NoDigestFound,
+    #[error("No recovery key found")]
+    NoRecoveryKeyFound,
 }
 
 pub fn triple_dh_decryption(

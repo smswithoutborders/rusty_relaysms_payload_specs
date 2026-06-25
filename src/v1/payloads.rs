@@ -5,6 +5,7 @@ use std::ops::Div;
 use std::sync::Arc;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 use crate::{bit_utils, utils, AsAny};
 use crate::bit_utils::BitParsingError;
@@ -123,6 +124,12 @@ pub enum V1PayloadsError {
 
     #[error("Protocol is not supported")]
     UnsupportedProtocol,
+
+    #[error("Protocol is not supported")]
+    PayloadTooShort,
+
+    #[error("Segments missing")]
+    MissingSegments,
 }
 
 #[derive(Debug, uniffi::Object, Serialize, Deserialize)]
@@ -268,22 +275,44 @@ impl V1Payloads {
     }
 
     #[uniffi::constructor]
-    pub fn join(payload: Vec<Vec<u8>>) -> Result<V1Payloads> {
-        let seg_0 = BASE64_STANDARD.decode(&payload[0])
-            .expect("Payload should be able to decode");
+    pub fn join(s_payload: Vec<Vec<u8>>) -> Result<V1Payloads> {
+        let mut payload : Vec<Vec<u8>> = vec![Vec::new(); s_payload.len()];
+        for p in s_payload {
+            let seg = BASE64_STANDARD.decode(p)
+                .expect("Payload should be able to decode");
+            let seg_num = match v1_get_payload_segment_number(seg.as_slice()) {
+                Ok(seg_num) => seg_num as usize,
+                Err(e) => return Err(e)
+            };
+            payload[seg_num] = seg;
+        }
+
+        // TODO: test this
+        if let Some(last_time) = payload.last() {
+            if !v1_get_is_last_segment(last_time) {
+                return Err(V1PayloadsError::MissingSegments)
+            }
+        }
+
+        // TODO: test this
+        for p in payload.clone() {
+            if p.is_empty() {
+                return Err(V1PayloadsError::MissingSegments)
+            }
+        }
+
         let seg_0 =
-            match V1PayloadWithAttachmentsHeader::deserialize(seg_0.as_slice()) {
+            match V1PayloadWithAttachmentsHeader::deserialize(payload[0].as_slice()) {
                 Ok(T) => T,
                 Err(T) => return Err(T),
             };
 
         let mut content = seg_0.get_content();
         let sess_id = seg_0.get_sess_id();
+
         for i in 1..payload.len() {
-            let seg_n = BASE64_STANDARD.decode(&payload[i])
-                .expect("Payload should be able to decode");
             let seg_n =
-                match V1PayloadWithAttachmentsNoHeader::deserialize(seg_n.as_slice()) {
+                match V1PayloadWithAttachmentsNoHeader::deserialize(payload[i].as_slice()) {
                     Ok(T) => T,
                     Err(T) => return Err(T),
                 };
@@ -319,7 +348,7 @@ impl V1Payloads {
 
         let min_take_for_base64 = calculate_b64_min_size(max_payload_size as usize) as u8;
 
-        let (items, left) = utils::take_n_from(
+        let items = utils::take_n_from(
             &self.contents, 0, min_take_for_base64 as usize - header as usize);
         let mut start_index: usize = items.len();
         if items.len() as u8 > max_payload_size {
@@ -349,7 +378,7 @@ impl V1Payloads {
         let mut seg_num :u8 = 1;
 
         while start_index < self.contents.len() {
-            let (items, left) = utils::take_n_from(
+            let items = utils::take_n_from(
                 &self.contents, start_index,
                 min_take_for_base64 as usize - ATTACHMENT_SEG_N_HEADER_SIZE as usize
             );
@@ -361,12 +390,14 @@ impl V1Payloads {
                 })
             }
             start_index += items.len();
+            let i_l = start_index >= self.contents.len();
 
             let payload_seg_n =
                 match V1PayloadWithAttachmentsNoHeader::new(
                     get_version(),
                     seg_num,
                     self.sess_id.unwrap(),
+                    i_l,
                     items,
                 ) {
                     Ok(transport) => transport,
@@ -383,11 +414,35 @@ impl V1Payloads {
 
 #[uniffi::export]
 pub fn v1_get_payload_session_id(data: &[u8]) -> Result<u8> {
+    if data.len() < 2 {
+        return Err(V1PayloadsError::PayloadTooShort)
+    }
     Ok(match bit_utils::bit_wrap(
         &data[0], 5, &data[1], 3) {
         Ok(s) => s,
         Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
     })
+}
+
+
+// TODO: test this
+pub fn v1_get_payload_segment_number(data: &[u8]) -> Result<u8> {
+    if data.len() < 2 {
+        return Err(V1PayloadsError::PayloadTooShort)
+    }
+    let sn = match bit_utils::bit_wrap(
+        &data[1], 4, &data[2], 3) {
+        Ok(s) => s,
+        Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
+    };
+    Ok(sn)
+}
+
+pub fn v1_get_is_last_segment(data: &[u8]) -> bool {
+    if data.len() < 2 {
+        return false
+    }
+    bit_utils::is_bit_on(&data[2], 4)
 }
 
 
@@ -506,7 +561,7 @@ fn test_payload_with_attachments() {
         Some(sess_id)
     ).unwrap();
 
-    let split = payload_att.split(Transports::Sms).unwrap();
+    let mut split = payload_att.split(Transports::Sms).unwrap();
     assert_eq!(160, split[0].len() as u32);
     assert_eq!(160, split[1].len() as u32);
 
@@ -523,6 +578,15 @@ fn test_payload_with_attachments() {
 
     let s = v1_get_payload_session_id(seg_n.as_slice()).unwrap();
     assert_eq!(sess_id, s);
+
+    let sn = v1_get_payload_segment_number(seg_0.as_slice()).unwrap();
+    assert_eq!(sn, 0);
+
+    let sn = v1_get_payload_segment_number(seg_n.as_slice()).unwrap();
+    assert_eq!(sn, 1);
+
+    let mut rng = rand::rng();
+    split.shuffle(&mut rng);
 
     let joined = V1Payloads::join(split).unwrap();
     assert_eq!(payload_att, joined);
