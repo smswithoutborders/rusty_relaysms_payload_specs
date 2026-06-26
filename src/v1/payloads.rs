@@ -470,7 +470,8 @@ fn test_payload_without_attachments() {
     let body = b"Here is some heavy Lorem Ipsum shit"; //4
     let subject = b"More things"; //7
     let k_id: u8 = 7;
-    let t_id: u32 = 2;
+    // let t_id: u32 = 2;
+    let t_id: u32 = 0xFFFFFFFF;
     let cat_id = V1ContentCategories::Bridge;
 
     let contents = V1ContentsContainer::new(
@@ -495,7 +496,6 @@ fn test_payload_without_attachments() {
 
     let deserialized = V1Payloads::deserialize_without_attachment(&serialized).unwrap();
     assert_eq!(Arc::new(transport_att_false), deserialized);
-
 
     let content = V1ContentsContainer::deserialize(
         deserialized.get_content().as_slice(), cat_id.clone(), 0).unwrap();
