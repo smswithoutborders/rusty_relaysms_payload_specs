@@ -91,36 +91,6 @@ let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
 let response = v1_bridge_offline_first_publisher_decrypt(...)
 ```
 
-### Publishing (with Attachments)
-```rust
-
-// example message
- let contents = V1ContentsContainer(
-      V1ContentCategories::Message,
-      body,
-      to,
-      subject,
-      attachment
-  );
-
-  let payload_att = V1Payloads(
-      contents.serialize(),
-      k_id,
-      len_att,
-      t_id,
-      sess_id
-  );
-
-// For sending
-let split = payload_att.split(Arc::new(SMS)).unwrap();
-
-// Receiving
-let joined = V1Payloads::join(split, V1ContentCategories::Message)
-
-...//
-// Joined can be parsed to either platform or bridge for publishing
-```
-
 ### Publishing (without Attachments)
 ```rust
 
@@ -148,7 +118,8 @@ let payload = payload_att.serialize_without_attachment().unwrap();
 let t = V1Payloads::get_types(payload)
 if t == V1PayloadsTypes::WithoutAttachment {
   let v1_payload = V1Payloads::deserialize_without_attachment();
-  let content = V1ContentContainer::deserialize(v1_payload.get_content());
+  let content = v1_platform_publisher_decrypt(v1_payload.get_content())
+  let v1_content_container = V1ContentContainer::deserialize(content);
 }
 ```
 
@@ -192,6 +163,7 @@ else if t == V1PayloadsTypes::WithAttachmentNoHeader {
 ...
 // for all session payload
 let v1_payload = V1PayloadsTypes::join([payloads])
-let content = V1ContentContainer::deserialize(v1_payload.get_content());
+let content = v1_platform_publisher_decrypt(v1_payload.get_content())
+let v1_content_container: V1ContentContainer = V1ContentContainer::deserialize(content);
 ```
 
