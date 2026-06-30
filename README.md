@@ -144,20 +144,24 @@ if t == V1PayloadsTypes::WithoutAttachment {
   );
 
 // For sending
-let payload = payload_att.serialize_With_attachment().unwrap();
+let payloads: [] = payload_att.split(Transports::Sms).unwrap();
 
-if t == V1PayloadsTypes::WithAttachmentHeader {
-  // first segment with attachment
-  // session id
-  let session_id = V1PayloadsTypes::get_session_id(payload)
-  ...
-}
+// Receiving
+for payload in payloads {
 
-else if t == V1PayloadsTypes::WithAttachmentNoHeader {
-  // nth segment with attachment
-  // session id
-  let session_id = V1PayloadsTypes::get_session_id(payload)
-  ...
+  if t == V1PayloadsTypes::WithAttachmentHeader {
+    // first segment with attachment
+    // session id
+    let session_id = V1PayloadsTypes::get_session_id(payload)
+    ...
+  }
+  
+  else if t == V1PayloadsTypes::WithAttachmentNoHeader {
+    // nth segment with attachment
+    // session id
+    let session_id = V1PayloadsTypes::get_session_id(payload)
+    ...
+  }
 }
 
 ...
