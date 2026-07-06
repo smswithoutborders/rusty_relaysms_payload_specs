@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use chacha20poly1305::ChaCha20Poly1305;
@@ -11,11 +12,11 @@ use crate::v1::cryptography::{v1_publishing_decrypt, v1_publishing_encryption, V
 const PROTOCOL_OFFLINE_FIRST: &[u8] = b"Noise_IK_25519_ChaChaPoly1305_SHA256";
 const INFO_OFFLINE_FIRST: &[u8] = b"RelaySMS C2S DR v1";
 
-#[derive(Debug, uniffi::Object)]
+#[derive(Debug, uniffi::Object, Clone)]
 pub struct OfflineFirst {
-    payload: Vec<u8>,
-    sc_pk_enc: Option<Vec<u8>>,
-    ec_pk: Option<Vec<u8>>,
+    pub payload: Vec<u8>,
+    pub sc_pk_enc: Option<Vec<u8>>,
+    pub ec_pk: Option<Vec<u8>>,
     h: Option<Vec<u8>>,
 }
 impl PartialEq for OfflineFirst {
@@ -130,10 +131,12 @@ impl OfflineFirst {
     #[uniffi::constructor]
     fn decrypt(
         ss: Vec<u8>,
-        ec_pk: Vec<u8>,
-        sc_pk_enc: Vec<u8>,
-        rx_payload: Vec<u8>,
+        offline_first: Arc<OfflineFirst>
     ) -> Result<OfflineFirst, V1CryptographicError> {
+        let ec_pk = offline_first.ec_pk.clone().unwrap();
+        let sc_pk_enc = offline_first.sc_pk_enc.clone().unwrap();
+        let rx_payload = offline_first.payload.clone();
+
         let mut h = digest(PROTOCOL_OFFLINE_FIRST);
         let ck = h.clone();
 
@@ -230,17 +233,13 @@ fn test_bridge_offline_first_publisher_encrypt_decrypt() {
     ).unwrap();
 
     let des = OfflineFirst::deserialize(
-        offline_first.serialize().unwrap().as_slice());
-    assert_eq!(des.unwrap(), offline_first);
-
-    let ec_kid_pk = PublicKey::from(&ec_kid).as_bytes().to_vec();
+        offline_first.serialize().unwrap().as_slice()).unwrap();
+    assert_eq!(des.clone(), offline_first);
 
     let ss_kid = ss_kid.as_bytes().to_vec();
     let decrypted = OfflineFirst::decrypt(
         ss_kid,
-        ec_kid_pk,
-        offline_first.sc_pk_enc.unwrap(),
-        offline_first.payload
+        Arc::new(des)
     ).unwrap();
 
     assert_eq!(plaintext.to_vec(), decrypted.payload);
