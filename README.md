@@ -60,18 +60,7 @@ let ciphertext = v1_token_encrypt(...)
 let token = v1_token_decrypt(...)
 ```
 
-### Bridge publisher (online first)
-```rust
-// Get token
-// Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_bridge_online_first_publisher_encrypt(...)
-
-// Verify token
-// Returns `FailedToDecrypt` in cases cannot decrypt
-let request = v1_bridge_online_first_publisher_decrypt(...)
-```
-
-### Bridge publisher (offline first)
+### Offline first publishing
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
@@ -80,7 +69,8 @@ let request = v1_bridge_online_first_publisher_decrypt(...)
 //   sc_pk_enc: bytes, // encrypted long term identity key
 //   h: bytes //MixHash value
 // }
-let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
+let offline_payload = OfflineFirst.encrypt(...)
+let tx_payload = offline_payload.serialize()
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
@@ -88,7 +78,8 @@ let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
 //   payload: bytes, // decrypted payload
 //   h: bytes //MixHash value
 // }
-let response = v1_bridge_offline_first_publisher_decrypt(...)
+let offline_payload = OfflineFirst.deserialize(tx_payload)
+let response = OfflineFirst.decrypt(.., offline_payload)
 ```
 
 ### Publishing (without Attachments)
