@@ -1,7 +1,7 @@
 mod platforms;
 mod requests;
 mod tokens;
-mod bridges;
+mod offline_first;
 mod backups;
 
 use aead::{Aead, Payload};
@@ -28,6 +28,12 @@ pub enum V1CryptographicError {
 
     #[error("No recovery key found")]
     NoRecoveryKeyFound,
+
+    #[error("No encrypted static key found")]
+    NoEncryptedStaticKey,
+
+    #[error("No encrypted static key found")]
+    NoPublicKeyFound,
 }
 
 pub fn triple_dh_decryption(
