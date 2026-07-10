@@ -130,6 +130,9 @@ pub enum V1PayloadsError {
 
     #[error("Segments missing")]
     MissingSegments,
+
+    #[error("No last segment")]
+    NoLastSegments,
 }
 
 #[derive(Debug, uniffi::Object, Serialize, Deserialize)]
@@ -289,15 +292,14 @@ impl V1Payloads {
             }
             payload[seg_num] = seg;
         }
-        return Err(V1PayloadsError::MissingSegments);
 
         // TODO: test this
         if let Some(last_seg) = payload.last() {
             if !v1_get_is_last_segment(last_seg) {
-                return Err(V1PayloadsError::MissingSegments)
+                return Err(V1PayloadsError::NoLastSegments)
             }
         } else {
-            return Err(V1PayloadsError::MissingSegments)
+            return Err(V1PayloadsError::NoLastSegments)
         }
 
         // // TODO: test this
