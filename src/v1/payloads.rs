@@ -299,8 +299,6 @@ impl V1Payloads {
                 !v1_get_is_last_segment(last_seg) {
                 return Err(V1PayloadsError::NoLastSegments)
             }
-        } else {
-            return Err(V1PayloadsError::NoLastSegments)
         }
 
         // // TODO: test this
@@ -554,7 +552,6 @@ fn test_payload_with_attachments() {
     let sess_id: u8 = 15;
     let k_id: u8 = 13;
     let t_id: Option<u32> = Option::from(255);
-
 
     let cat_id = V1ContentCategories::Message;
     let contents = V1ContentsContainer::new(
