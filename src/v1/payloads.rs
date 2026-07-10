@@ -289,12 +289,15 @@ impl V1Payloads {
             }
             payload[seg_num] = seg;
         }
+        return Err(V1PayloadsError::MissingSegments);
 
         // TODO: test this
         if let Some(last_seg) = payload.last() {
             if !v1_get_is_last_segment(last_seg) {
                 return Err(V1PayloadsError::MissingSegments)
             }
+        } else {
+            return Err(V1PayloadsError::MissingSegments)
         }
 
         // // TODO: test this
