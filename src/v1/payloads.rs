@@ -25,7 +25,7 @@ pub mod payload_without_attachment;
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
-#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[derive(PartialEq, Debug, thiserror::Error, uniffi::Error)]
 pub enum V1PayloadsError {
     #[error("Version too large")]
     VersionTooLarge,
@@ -284,22 +284,25 @@ impl V1Payloads {
                 Ok(seg_num) => seg_num as usize,
                 Err(e) => return Err(e)
             };
+            if seg_num >= payload.len() {
+                return Err(V1PayloadsError::MissingSegments)
+            }
             payload[seg_num] = seg;
         }
 
         // TODO: test this
-        if let Some(last_time) = payload.last() {
-            if !v1_get_is_last_segment(last_time) {
+        if let Some(last_seg) = payload.last() {
+            if !v1_get_is_last_segment(last_seg) {
                 return Err(V1PayloadsError::MissingSegments)
             }
         }
 
-        // TODO: test this
-        for p in payload.clone() {
-            if p.is_empty() {
-                return Err(V1PayloadsError::MissingSegments)
-            }
-        }
+        // // TODO: test this
+        // for p in payload.clone() {
+        //     if p.is_empty() {
+        //         return Err(V1PayloadsError::MissingSegments)
+        //     }
+        // }
 
         let seg_0 =
             match V1PayloadWithAttachmentsHeader::deserialize(payload[0].as_slice()) {
@@ -588,7 +591,14 @@ fn test_payload_with_attachments() {
     let mut rng = rand::rng();
     split.shuffle(&mut rng);
 
-    let joined = V1Payloads::join(split).unwrap();
+    let mut missing_segment_split = split.clone();
+    missing_segment_split.remove(3);
+
+    let missing_joined = V1Payloads::join(missing_segment_split);
+    assert!(missing_joined.is_err());
+    assert_eq!(missing_joined.err().unwrap(), V1PayloadsError::MissingSegments);
+
+    let joined = V1Payloads::join(split.clone()).unwrap();
     assert_eq!(payload_att, joined);
 
     let payload_att = V1Payloads::new(

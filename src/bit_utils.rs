@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
 
-#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[derive(Debug, thiserror::Error, uniffi::Error, PartialEq)]
 pub enum BitParsingError {
     IndexOutOfBounds,
     ExpectedLargerThanOctet,

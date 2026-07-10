@@ -35,7 +35,7 @@ pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories> {
 }
 
 
-#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[derive(Debug, thiserror::Error, uniffi::Error, PartialEq)]
 pub enum V1ContentError {
     #[error("Inconsistent subject indicator")]
     InconsistentSubjectIndicator,
