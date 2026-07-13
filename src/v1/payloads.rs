@@ -384,7 +384,7 @@ impl V1Payloads {
 
         let mut seg_num :u8 = 1;
 
-        while start_index < self.contents.len() {
+        loop {
             let items = utils::take_n_from(
                 &self.contents, start_index,
                 min_take_for_base64 as usize - ATTACHMENT_SEG_N_HEADER_SIZE as usize
@@ -398,9 +398,6 @@ impl V1Payloads {
             }
             start_index += items.len();
             let i_l = start_index  >= self.contents.len();
-            if i_l{
-                println!("Yes")
-            }
 
             let payload_seg_n =
                 match V1PayloadWithAttachmentsNoHeader::new(
@@ -413,9 +410,15 @@ impl V1Payloads {
                     Ok(transport) => transport,
                     Err(e) => { return Err(V1PayloadsError::from(e)); }
                 };
-            let seg_n = payload_seg_n.serialize().expect("seg n should be serializable");
-            let seg_n = BASE64_STANDARD.encode(seg_n);
+            let seg_n_b64 = payload_seg_n.serialize().expect("seg n should be serializable");
+            let seg_n = BASE64_STANDARD.encode(seg_n_b64.clone());
             payloads.push(seg_n.as_bytes().to_vec());
+
+            if i_l {
+                assert!(v1_get_is_last_segment(seg_n_b64.as_slice()));
+                break
+            }
+
             seg_num += 1;
         }
         Ok(payloads)
@@ -449,6 +452,7 @@ pub fn v1_get_payload_segment_number(data: &[u8]) -> Result<u8> {
     Ok(sn)
 }
 
+#[uniffi::export]
 pub fn v1_get_is_last_segment(data: &[u8]) -> bool {
     if data.len() < 2 {
         return false
@@ -574,7 +578,12 @@ fn test_payload_with_attachments() {
     let mut split = payload_att.split(Transports::Sms).unwrap();
     assert_eq!(160, split[0].len() as u32);
     assert_eq!(160, split[1].len() as u32);
+    let mut missing_segment_split = split.clone();
+    missing_segment_split.remove(3);
 
+    let missing_joined = V1Payloads::join(missing_segment_split);
+    assert!(missing_joined.is_err());
+    assert_eq!(missing_joined.err().unwrap(), V1PayloadsError::MissingSegments);
 
     let seg_0 = BASE64_STANDARD.decode(&split[0]).unwrap();
     let t = v1_get_payload_type(seg_0.as_slice()).unwrap();
@@ -600,12 +609,6 @@ fn test_payload_with_attachments() {
     let mut rng = rand::rng();
     split.shuffle(&mut rng);
 
-    let mut missing_segment_split = split.clone();
-    missing_segment_split.remove(3);
-
-    let missing_joined = V1Payloads::join(missing_segment_split);
-    assert!(missing_joined.is_err());
-    assert_eq!(missing_joined.err().unwrap(), V1PayloadsError::MissingSegments);
 
     let joined = V1Payloads::join(split.clone()).unwrap();
     assert_eq!(payload_att, joined);

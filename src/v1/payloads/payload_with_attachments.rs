@@ -185,7 +185,9 @@ impl V1PayloadWithAttachmentsNoHeader {
         bytes.push(byte);
 
         let mut byte = bit_utils::get_bits(&self.seg_num, 4, 7);
-        if self.i_l { byte = bit_utils::turn_bit_on(&byte, 4) };
+        if self.i_l {
+            byte = bit_utils::turn_bit_on(&byte, 4) ;
+        };
         bytes.push(byte);
         bytes.extend(self.content.clone());
 
