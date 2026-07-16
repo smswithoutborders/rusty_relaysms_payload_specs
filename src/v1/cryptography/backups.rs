@@ -10,7 +10,7 @@ use crate::v1::cryptography::V1CryptographicError;
 
 const BACKUP_SALT: &[u8] = b"RelaySMS Export backup";
 
-#[derive(PartialEq, Debug, uniffi::Object, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, uniffi::Object, Serialize, Deserialize, Clone)]
 pub struct BackupRestore {
     nonce: Vec<u8>,
     recovery_key: Option<Vec<u8>>,
@@ -25,17 +25,20 @@ impl BackupRestore {
     fn get_ciphertext(&self) -> Option<Vec<u8>> { self.ciphertext.clone() }
 
     #[uniffi::constructor]
-    fn v1_backup_encrypt(data: &[u8]) -> Result<Arc<BackupRestore>, V1CryptographicError>{
-        let recovery_key: String = rand::rng()
-            .sample_iter(&Alphanumeric)
-            .map(char::from)
-            // 1. Filter the INFINITE stream first for UpperCase OR Digits
-            .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
-            // 2. Now take exactly 64 characters from that filtered stream
-            .take(64)
-            .collect();
-
-        let recovery_key = recovery_key.as_bytes();
+    fn v1_backup_encrypt(
+        data: &[u8],
+        recovery_key: Option<Vec<u8>>,
+    ) -> Result<Arc<BackupRestore>, V1CryptographicError>{
+        let recovery_key: Vec<u8> = if recovery_key.is_none() {
+            rand::rng()
+                .sample_iter(&Alphanumeric)
+                .map(char::from)
+                .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+                .take(64)
+                .collect::<String>()
+                .into_bytes()
+        } else { recovery_key.unwrap().to_vec() };
+        let recovery_key = recovery_key.as_slice();
 
         let rng: [u8; 12] = rand::rng().random();
         let nonce = Nonce::try_from(rng).unwrap();
@@ -109,13 +112,28 @@ impl BackupRestore {
 #[test]
 fn v1_backup_test() {
     let rng: [u8; 32] = rand::rng().random();
-    let backup_restore = BackupRestore::v1_backup_encrypt(rng.as_slice()).unwrap();
+    let backup_restore = BackupRestore::v1_backup_encrypt(rng.as_slice(), None)
+        .unwrap();
     let br = BackupRestore {
         recovery_key: backup_restore.recovery_key.clone(),
         nonce: backup_restore.nonce.clone(),
         ciphertext: backup_restore.ciphertext.clone(),
     };
     let plaintext = br.v1_restore_decrypt().unwrap();
-
     assert_eq!(rng.as_slice(), plaintext);
+
+    let recovery_key = backup_restore.recovery_key.clone().unwrap();
+    let backup_restore = BackupRestore::v1_backup_encrypt(
+        rng.as_slice(), Some(recovery_key.clone()))
+        .unwrap();
+    let br = BackupRestore {
+        recovery_key: backup_restore.recovery_key.clone(),
+        nonce: backup_restore.nonce.clone(),
+        ciphertext: backup_restore.ciphertext.clone(),
+    };
+    let plaintext = br.v1_restore_decrypt().unwrap();
+    assert_eq!(rng.as_slice(), plaintext);
+
+    assert_eq!(backup_restore.recovery_key.clone().unwrap(), recovery_key.clone());
+
 }

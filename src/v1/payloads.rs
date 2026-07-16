@@ -479,6 +479,21 @@ pub fn v1_get_payload_type(data: &[u8]) -> Result<V1PayloadsTypes> {
     Ok(V1PayloadsTypes::WithoutAttachment)
 }
 
+#[uniffi::export]
+pub fn v1_calculate_segments(
+    payload_size: u32,
+    transports: Transports,
+    is_token_id: bool,
+) -> u32 {
+    let max_transport_size = transports.get_max_payload_size();
+    let header_size = if is_token_id { ATTACHMENT_SEG_O_TID_HEADER_SIZE }
+    else { ATTACHMENT_SEG_O_HEADER_SIZE };
+    let seg_count = (payload_size + header_size as u32 +
+        (ATTACHMENT_SEG_N_HEADER_SIZE as u32 * (payload_size.div_ceil(max_transport_size) - 1)))
+        .div_ceil(max_transport_size);
+    seg_count + calculate_b64_min_size(seg_count as usize) as u32 + 16 // 16 is encryption tag
+}
+
 #[test]
 fn test_payload_without_attachments() {
     let to  = b"example@gmail.com"; //2
