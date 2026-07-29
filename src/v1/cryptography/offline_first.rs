@@ -66,7 +66,9 @@ impl OfflineFirst {
         let sc = StaticSecret::from(sc);
         let sc_pk = PublicKey::from(&sc);
 
-        let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
+        let rng: [u8; 12] = rand::rng().random();
+        let nonce = rng.as_slice();
+        let nonce = Nonce::try_from(nonce).unwrap();
         let cipher = ChaCha20Poly1305::new_from_slice(k.as_slice())
             .expect("Aes256Gcm::new_from_slice failed");
 
@@ -101,6 +103,7 @@ impl OfflineFirst {
             aad: h.as_bytes(),
         };
         let tx_payload = cipher.encrypt(&nonce, aad).expect("encryption should be ok");
+        let tx_payload = [nonce.as_slice(), tx_payload.as_slice()].concat();
 
         h = digest([h.into_bytes().to_vec(), sc_pk_enc.to_vec()].concat());
 
@@ -135,7 +138,7 @@ impl OfflineFirst {
     ) -> Result<OfflineFirst, V1CryptographicError> {
         let ec_pk = offline_first.ec_pk.clone().unwrap();
         let sc_pk_enc = offline_first.sc_pk_enc.clone().unwrap();
-        let rx_payload = offline_first.payload.clone();
+        let rx_payload = &offline_first.payload.clone()[12..];
 
         let mut h = digest(PROTOCOL_OFFLINE_FIRST);
         let ck = h.clone();
@@ -158,7 +161,8 @@ impl OfflineFirst {
         let mut k = [0u8; 32];
         hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
 
-        let nonce = Nonce::try_from([0x00u8; 12]).unwrap();
+        let nonce = &offline_first.payload[..12];
+        let nonce = Nonce::try_from(nonce).unwrap();
         let cipher = ChaCha20Poly1305::new_from_slice(k.as_slice())
             .expect("Aes256Gcm::new_from_slice failed");
         let aad = Payload {
