@@ -15,6 +15,8 @@ const INFO_OFFLINE_FIRST: &[u8] = b"RelaySMS C2S DR v1";
 #[derive(Debug, uniffi::Object, Clone)]
 pub struct OfflineFirst {
     pub payload: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub nonce1: Vec<u8>,
     pub sc_pk_enc: Option<Vec<u8>>,
     pub ec_pk: Option<Vec<u8>>,
     h: Option<Vec<u8>>,
@@ -78,12 +80,6 @@ impl OfflineFirst {
         };
         let sc_pk_enc = cipher.encrypt(&nonce, aad)
             .expect("encryption should be ok");
-        // let aad = Payload {
-        //     msg: sc_pk_enc.as_ref(),
-        //     aad: h.as_bytes(),
-        // };
-        // let test = cipher.decrypt(&nonce, aad).expect("decryption should be ok");
-        // assert_eq!(sc_pk.as_bytes().to_vec(), test);
 
         h = digest([h.into_bytes().to_vec(), sc_pk_enc.to_vec()].concat());
         let dh_ss = sc.diffie_hellman(&ss_pk);
@@ -95,6 +91,10 @@ impl OfflineFirst {
         let mut k = [0u8; 32];
         hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
 
+        let rng: [u8; 12] = rand::rng().random();
+        let nonce1 = rng.as_slice();
+        let nonce1 = Nonce::try_from(nonce1).unwrap();
+
         let cipher = ChaCha20Poly1305::new_from_slice(k.as_slice())
             .expect("ChaChaPoly1305::new_from_slice failed");
 
@@ -102,13 +102,14 @@ impl OfflineFirst {
             msg: payload.as_slice(),
             aad: h.as_bytes(),
         };
-        let tx_payload = cipher.encrypt(&nonce, aad).expect("encryption should be ok");
-        let tx_payload = [nonce.as_slice(), tx_payload.as_slice()].concat();
+        let tx_payload = cipher.encrypt(&nonce1, aad).expect("encryption should be ok");
 
         h = digest([h.into_bytes().to_vec(), sc_pk_enc.to_vec()].concat());
 
         Ok(OfflineFirst {
             payload: tx_payload,
+            nonce: nonce.to_vec(),
+            nonce1: nonce1.to_vec(),
             sc_pk_enc: Some(sc_pk_enc),
             ec_pk: Some(ec_pk.as_bytes().to_vec()),
             h: Some(h.into_bytes().to_vec()),
@@ -125,7 +126,9 @@ impl OfflineFirst {
         }
 
         Ok([self.ec_pk.clone().unwrap(),
+            self.nonce.clone().to_vec(),
             self.sc_pk_enc.clone().unwrap(),
+            self.nonce1.clone().to_vec(),
             self.payload.as_slice().to_vec()]
             .concat().to_vec())
     }
@@ -138,7 +141,7 @@ impl OfflineFirst {
     ) -> Result<OfflineFirst, V1CryptographicError> {
         let ec_pk = offline_first.ec_pk.clone().unwrap();
         let sc_pk_enc = offline_first.sc_pk_enc.clone().unwrap();
-        let rx_payload = &offline_first.payload.clone()[12..];
+        let rx_payload = &offline_first.payload.clone();
 
         let mut h = digest(PROTOCOL_OFFLINE_FIRST);
         let ck = h.clone();
@@ -161,7 +164,7 @@ impl OfflineFirst {
         let mut k = [0u8; 32];
         hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
 
-        let nonce = &offline_first.payload[..12];
+        let nonce = offline_first.nonce.as_slice();
         let nonce = Nonce::try_from(nonce).unwrap();
         let cipher = ChaCha20Poly1305::new_from_slice(k.as_slice())
             .expect("Aes256Gcm::new_from_slice failed");
@@ -185,16 +188,20 @@ impl OfflineFirst {
         let mut k = [0u8; 32];
         hk.expand(INFO_OFFLINE_FIRST, &mut k).expect("expansion should be ok");
 
+        let nonce1 = offline_first.nonce1.as_slice();
+        let nonce1 = Nonce::try_from(nonce1).unwrap();
         let cipher = ChaCha20Poly1305::new_from_slice(k.as_slice())
             .expect("ChaChaPoly1305::new_from_slice failed");
         let aad = Payload {
             msg: rx_payload.as_ref(),
             aad: h.as_bytes(),
         };
-        let payload = cipher.decrypt(&nonce, aad)
+        let payload = cipher.decrypt(&nonce1, aad)
             .expect("decryption should be ok");
         Ok(OfflineFirst {
             payload,
+            nonce: nonce.to_vec(),
+            nonce1: nonce1.to_vec(),
             sc_pk_enc: None,
             ec_pk: Some(ec_pk.as_bytes().to_vec()),
             h: Some(h.into_bytes().to_vec()),
@@ -204,10 +211,14 @@ impl OfflineFirst {
     #[uniffi::constructor]
     fn deserialize(input: &[u8]) -> Result<OfflineFirst, V1CryptographicError> {
         let ec_pk = input[..32].to_vec();
-        let sc_pk_enc = input[32..(64 + 16)].to_vec();
-        let payload = input[(64 + 16)..].to_vec();
+        let nonce = input[32..44].to_vec();
+        let sc_pk_enc = input[44..92].to_vec();
+        let nonce1 = input[92..104].to_vec();
+        let payload = input[104..].to_vec();
         Ok(OfflineFirst {
             payload,
+            nonce,
+            nonce1,
             ec_pk: Some(ec_pk),
             sc_pk_enc: Some(sc_pk_enc),
             h: None,
