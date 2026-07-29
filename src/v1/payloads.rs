@@ -502,7 +502,7 @@ fn test_payload_without_attachments() {
     let k_id: u8 = 7;
     // let t_id: u32 = 2;
     let t_id: u32 = 0xFFFFFFFF;
-    let cat_id = V1ContentCategories::Bridge;
+    let cat_id = V1ContentCategories::Email;
 
     let contents = V1ContentsContainer::new(
         cat_id.clone(),
