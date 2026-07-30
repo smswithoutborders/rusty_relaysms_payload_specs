@@ -36,7 +36,8 @@ fn v1_requests_encrypt(
     ec: &[u8],
     ss_kid_pk: &[u8],
     method_name: &[u8],
-    payload: Option<Vec<u8>>
+    payload: Option<Vec<u8>>,
+    timestamp: Option<u64>,
 ) -> Result<RequestPayload, V1CryptographicError> {
     let ec: [u8; 32] = ec.try_into().expect("es_kid should be 32 bytes");
     let ec = StaticSecret::from(ec);
@@ -51,10 +52,11 @@ fn v1_requests_encrypt(
     ].concat();
 
     let start = SystemTime::now();
-    let timestamp = start
-        .duration_since(UNIX_EPOCH)
-        .expect("time should go forward")
-        .as_secs();
+    let timestamp = if timestamp.is_some() {timestamp.unwrap()} else {
+        start.duration_since(UNIX_EPOCH)
+            .expect("time should go forward")
+            .as_secs()
+    };
 
     let method_len = method_name.len() as u8;
     let mut request_string: Vec<u8> = Vec::new();
@@ -165,6 +167,7 @@ fn test_request_encryption_decryption() {
         ss_kid_pk.to_bytes().as_slice(),
         method_name.as_slice(),
         Some(payload.to_vec()),
+        None,
     ).unwrap();
 
     let decrypted = v1_requests_decrypt(
@@ -177,11 +180,17 @@ fn test_request_encryption_decryption() {
     assert_eq!(payload.to_vec(), decrypted.payload);
     assert_eq!(method_name.to_vec(), decrypted.method_name);
 
+    let start = SystemTime::now();
+    let timestamp = start.duration_since(UNIX_EPOCH)
+        .expect("time should go forward")
+        .as_secs();
+
     let ciphertext = v1_requests_encrypt(
         ec_kid.to_bytes().as_slice(),
         ss_kid_pk.to_bytes().as_slice(),
         method_name.as_slice(),
         None,
+        Some(timestamp),
     ).unwrap();
 
     let decrypted = v1_requests_decrypt(
