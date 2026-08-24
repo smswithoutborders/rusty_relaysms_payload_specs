@@ -43,7 +43,6 @@ impl BackupRestore {
         let rng: [u8; 12] = rand::rng().random();
         let nonce = Nonce::try_from(rng).unwrap();
 
-        // TODO: make sure it's hard to crack
         let mut chacha_key = [0u8; 32];
         Argon2::default().hash_password_into(recovery_key, BACKUP_SALT, &mut chacha_key)
             .expect("Should be able to hash the digest list");
