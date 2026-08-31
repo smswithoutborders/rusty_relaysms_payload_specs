@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::{bit_utils, v1};
 use crate::v1::contents::email::V1Emails;
-use crate::v1::contents::{V1ContentCategories, V1ContentVariation, V1Contents, V1ContentsContainer};
+use crate::v1::contents::{V1ContentCategories, V1Contents, V1ContentsContainer};
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{ContentSerializationError, KeyIdTooLarge, MissingPayload, VersionTooLarge};
 
@@ -30,7 +30,7 @@ impl V1PayloadWithoutAttachments {
         t_id: Option<u32>,
         payload: &[u8],
     ) -> Result<Arc<Self>> {
-        if k_id > (2u8.pow(4) - 1) {
+        if k_id > u8::MAX {
             return Err(KeyIdTooLarge);
         }
 

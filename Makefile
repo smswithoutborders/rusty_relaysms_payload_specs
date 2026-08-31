@@ -16,3 +16,4 @@ kotlin: so
       --library target/aarch64-linux-android/release/librelaysms_spec_payload.so \
       --language kotlin \
       --out-dir generated/
+#      --config uniffi.toml

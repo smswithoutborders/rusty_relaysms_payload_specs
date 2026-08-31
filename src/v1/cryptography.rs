@@ -1,7 +1,8 @@
 mod platforms;
 mod requests;
 mod tokens;
-mod bridges;
+mod offline_first;
+mod backups;
 
 use aead::{Aead, Payload};
 use aes_gcm::Nonce;
@@ -21,6 +22,18 @@ pub enum V1CryptographicError {
     FailedToEncrypt {
         err: String,
     },
+
+    #[error("Ciphertext is empty")]
+    CiphertextEmpty,
+
+    #[error("No recovery key found")]
+    NoRecoveryKeyFound,
+
+    #[error("No encrypted static key found")]
+    NoEncryptedStaticKey,
+
+    #[error("No encrypted static key found")]
+    NoPublicKeyFound,
 }
 
 pub fn triple_dh_decryption(

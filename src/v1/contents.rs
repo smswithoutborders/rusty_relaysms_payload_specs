@@ -20,14 +20,6 @@ pub enum V1ContentCategories {
     Email = 0x0,
     Message = 0x1,
     Text = 0x2,
-    Bridge = 0x3,
-}
-
-#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
-pub enum V1ContentVariation {
-    EMAIL { value: Arc<V1Emails> },
-    MESSAGE { value: Arc<V1Messages> },
-    TEXT { value: Arc<V1Text> },
 }
 
 #[uniffi::export]
@@ -36,13 +28,12 @@ pub fn v1_content_category_from_u8(value: u8) -> Result<V1ContentCategories> {
         0x0 => Ok(V1ContentCategories::Email),
         0x1 => Ok(V1ContentCategories::Message),
         0x2 => Ok(V1ContentCategories::Text),
-        0x3 => Ok(V1ContentCategories::Bridge),
         _ => Err(V1ContentError::InvalidCategory),
     }
 }
 
 
-#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[derive(Debug, thiserror::Error, uniffi::Error, PartialEq)]
 pub enum V1ContentError {
     #[error("Inconsistent subject indicator")]
     InconsistentSubjectIndicator,
@@ -80,7 +71,6 @@ pub enum V1ContentError {
     #[error("Error deserializing for storage")]
     ErrorDeserializingForStorage,
 }
-
 
 #[uniffi::export(with_foreign)]
 pub trait V1Contents: Debug + Send + Sync {
@@ -143,7 +133,7 @@ impl V1ContentsContainer {
         len_att: u16
     ) -> Result<V1ContentsContainer> {
         match cat_id {
-            V1ContentCategories::Email | V1ContentCategories::Bridge => {
+            V1ContentCategories::Email => {
                 let email = match V1Emails::deserialize(data, len_att) {
                     Ok(email) => email,
                     Err(e) => return Err(e)
@@ -187,7 +177,7 @@ impl V1ContentsContainer {
 
     pub fn serialize( &self, ) -> Result<Vec<u8>> {
         match self.cat_id {
-            V1ContentCategories::Email | V1ContentCategories::Bridge => {
+            V1ContentCategories::Email => {
                 let email = match V1Emails::new(
                     self.to.clone().unwrap(),
                     self.body.clone(),

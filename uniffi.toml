@@ -1,0 +1,3 @@
+[bindings.kotlin]
+#generate_serializable_types = true
+# disable_java_cleaner = false

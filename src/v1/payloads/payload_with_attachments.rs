@@ -2,13 +2,14 @@ use std::fmt::{Debug};
 use std::sync::Arc;
 use crate::{bit_utils, v1, AsAny};
 use crate::v1::contents::email::V1Emails;
-use crate::v1::contents::{V1ContentCategories, V1ContentVariation};
+use crate::v1::contents::{V1ContentCategories};
 use crate::v1::payloads::{V1Payloads, V1PayloadsError};
 use crate::v1::payloads::V1PayloadsError::{KeyIdTooLarge, SessionIdTooLarge};
 
 type Result<T> = std::result::Result<T, V1PayloadsError>;
 
-pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 9;
+pub const ATTACHMENT_SEG_O_HEADER_SIZE: u8 = 5;
+pub const ATTACHMENT_SEG_O_TID_HEADER_SIZE: u8 = 9;
 pub const ATTACHMENT_SEG_N_HEADER_SIZE: u8 = 3;
 
 // #[derive(Debug, PartialEq, uniffi::Object)]
@@ -17,8 +18,8 @@ pub struct V1PayloadWithAttachmentsHeader {
     version: u8,
     i_tid: bool,
     i_att: bool,
-    seg_num: u8,
     sess_id: u8,
+    seg_num: u8,
     k_id: u8,
     len_att: u16,
     t_id: Option<u32>,
@@ -30,8 +31,9 @@ pub struct V1PayloadWithAttachmentsNoHeader {
     version: u8,
     i_tid: bool,
     i_att: bool,
-    seg_num: u8,
     sess_id: u8,
+    seg_num: u8,
+    i_l: bool,
     content: Vec<u8>
 }
 
@@ -151,6 +153,7 @@ impl V1PayloadWithAttachmentsNoHeader {
         version: u8,
         seg_num: u8,
         sess_id: u8,
+        i_l: bool,
         payload: Vec<u8>
     ) -> Result<Self> {
         if sess_id > (2u8.pow(7) - 1) {
@@ -163,6 +166,7 @@ impl V1PayloadWithAttachmentsNoHeader {
             i_att: true,
             sess_id,
             seg_num,
+            i_l,
             content: payload,
         })
     }
@@ -180,7 +184,10 @@ impl V1PayloadWithAttachmentsNoHeader {
         byte = bit_utils::put_value(&byte, 4, self.seg_num, 4);
         bytes.push(byte);
 
-        let byte = bit_utils::get_bits(&self.seg_num, 4, 7);
+        let mut byte = bit_utils::get_bits(&self.seg_num, 4, 7);
+        if self.i_l {
+            byte = bit_utils::turn_bit_on(&byte, 4) ;
+        };
         bytes.push(byte);
         bytes.extend(self.content.clone());
 
@@ -201,6 +208,7 @@ impl V1PayloadWithAttachmentsNoHeader {
             Ok(s) => s,
             Err(e) => return Err(V1PayloadsError::ErrorParsingBits{ error: e }),
         };
+        let i_l = bit_utils::is_bit_on(&data[2], 4);
         let payload = data[3..].to_vec();
         Ok(
             V1PayloadWithAttachmentsNoHeader {
@@ -209,6 +217,7 @@ impl V1PayloadWithAttachmentsNoHeader {
                 i_att,
                 sess_id,
                 seg_num,
+                i_l,
                 content: payload
             }
         )

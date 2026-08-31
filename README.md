@@ -60,29 +60,7 @@ let ciphertext = v1_token_encrypt(...)
 let token = v1_token_decrypt(...)
 ```
 
-### Platform publisher
-```rust
-// Get token
-// Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_platform_publisher_encrypt(...)
-
-// Verify token
-// Returns `FailedToDecrypt` in cases cannot decrypt
-let payload = v1_platform_publisher_decrypt(...)
-```
-
-### Bridge publisher (online first)
-```rust
-// Get token
-// Returns `FailedToEncrypt` in cases cannot decrypt
-let ciphertext = v1_bridge_online_first_publisher_encrypt(...)
-
-// Verify token
-// Returns `FailedToDecrypt` in cases cannot decrypt
-let request = v1_bridge_online_first_publisher_decrypt(...)
-```
-
-### Bridge publisher (offline first)
+### Offline first publishing
 ```rust
 // Get token
 // Returns `FailedToEncrypt` in cases cannot decrypt
@@ -91,7 +69,8 @@ let request = v1_bridge_online_first_publisher_decrypt(...)
 //   sc_pk_enc: bytes, // encrypted long term identity key
 //   h: bytes //MixHash value
 // }
-let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
+let offline_payload = OfflineFirst.encrypt(...)
+let tx_payload = offline_payload.serialize()
 
 // Verify token
 // Returns `FailedToDecrypt` in cases cannot decrypt
@@ -99,7 +78,40 @@ let ciphertext = v1_bridge_offline_first_publisher_encrypt(...)
 //   payload: bytes, // decrypted payload
 //   h: bytes //MixHash value
 // }
-let response = v1_bridge_offline_first_publisher_decrypt(...)
+let offline_payload = OfflineFirst.deserialize(tx_payload)
+let response = OfflineFirst.decrypt(.., offline_payload)
+```
+
+### Publishing (without Attachments)
+```rust
+
+// example message
+ let contents = V1ContentsContainer(
+      V1ContentCategories::Message,
+      body,
+      to,
+      subject,
+      attachment
+  );
+
+  let payload_att = V1Payloads(
+      contents.serialize(),
+      k_id,
+      len_att,
+      t_id,
+      sess_id
+  );
+
+// For sending
+let payload = payload_att.serialize_without_attachment().unwrap();
+
+// For receiving
+let t = V1Payloads::get_types(payload)
+if t == V1PayloadsTypes::WithoutAttachment {
+  let v1_payload = V1Payloads::deserialize_without_attachment();
+  let content = v1_platform_publisher_decrypt(v1_payload.get_content())
+  let v1_content_container = V1ContentContainer::deserialize(content);
+}
 ```
 
 ### Publishing (with Attachments)
@@ -123,11 +135,30 @@ let response = v1_bridge_offline_first_publisher_decrypt(...)
   );
 
 // For sending
-let split = payload_att.split(Arc::new(SMS)).unwrap();
+let payloads: [] = payload_att.split(Transports::Sms).unwrap();
 
 // Receiving
-let joined = V1Payloads::join(split, V1ContentCategories::Message)
+for payload in payloads {
 
-...//
-// Joined can be parsed to either platform or bridge for publishing
+  if t == V1PayloadsTypes::WithAttachmentHeader {
+    // first segment with attachment
+    // session id
+    let session_id = V1PayloadsTypes::get_session_id(payload)
+    ...
+  }
+  
+  else if t == V1PayloadsTypes::WithAttachmentNoHeader {
+    // nth segment with attachment
+    // session id
+    let session_id = V1PayloadsTypes::get_session_id(payload)
+    ...
+  }
+}
+
+...
+// for all session payload
+let v1_payload = V1PayloadsTypes::join([payloads])
+let content = v1_platform_publisher_decrypt(v1_payload.get_content())
+let v1_content_container: V1ContentContainer = V1ContentContainer::deserialize(content);
 ```
+
