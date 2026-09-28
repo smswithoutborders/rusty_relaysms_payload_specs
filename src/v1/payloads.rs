@@ -485,13 +485,18 @@ pub fn v1_calculate_segments(
     transports: Transports,
     is_token_id: bool,
 ) -> u32 {
-    let max_transport_size = transports.get_max_payload_size();
-    let header_size = if is_token_id { ATTACHMENT_SEG_O_TID_HEADER_SIZE }
-    else { ATTACHMENT_SEG_O_HEADER_SIZE };
-    let seg_count = (payload_size + header_size as u32 +
-        (ATTACHMENT_SEG_N_HEADER_SIZE as u32 * (payload_size.div_ceil(max_transport_size) - 1)))
-        .div_ceil(max_transport_size);
-    seg_count + calculate_b64_min_size(seg_count as usize) as u32 + 16 // 16 is encryption tag
+    let N = payload_size;
+    let p = transports.get_max_payload_size();
+    let x1 = if(is_token_id) {
+        ATTACHMENT_SEG_O_TID_HEADER_SIZE
+    } else {
+        ATTACHMENT_SEG_O_HEADER_SIZE
+    };
+
+    let x2 = ATTACHMENT_SEG_N_HEADER_SIZE;
+
+    let n = ((4*N) - (3*p) + (3*x1 as u32)).div_ceil((3*p) - (3*x2 as u32));
+    n + 1
 }
 
 #[test]
@@ -644,7 +649,7 @@ fn test_payload_with_attachments() {
 
 #[test]
 fn test_serialization() {
-    let att = rand::random::<[u8; (140*10)]>().to_vec();
+    let att = rand::random::<[u8; (626*2*10)]>().to_vec();
     let len_att = att.len() as u16;
 
     let to  = b"example@gmail.com"; //2
@@ -673,11 +678,10 @@ fn test_serialization() {
         Some(sess_id)
     ).unwrap();
     let serialized = payload_att.serialize().unwrap();
-
+    let len_contents = contents.serialize().unwrap().len();
 
     let deserialized = V1Payloads::deserialize(serialized).unwrap();
     assert_eq!(payload_att, deserialized);
-
 
     let payload_att = V1Payloads::new(
         contents.serialize().unwrap(),
@@ -690,4 +694,16 @@ fn test_serialization() {
     let serialized = payload_att.serialize().unwrap();
     let deserialized = V1Payloads::deserialize(serialized).unwrap();
     assert_eq!(payload_att, deserialized);
+
+    let split = payload_att.split(Transports::Sms).unwrap();
+    let expected_size = split.len() as u32;
+
+    // let n = ((split.len() as u32 - 1 ) * Transports::Sms.get_max_payload_size()) + split.last().unwrap().len() as u32;
+    let calculated_size = v1_calculate_segments(len_contents as u32, Transports::Sms, true);
+
+    for sp in split.iter().take(expected_size as usize - 1) {
+        assert_eq!(Transports::Sms.get_max_payload_size() as usize, sp.len());
+    }
+
+    assert_eq!(calculated_size, expected_size);
 }

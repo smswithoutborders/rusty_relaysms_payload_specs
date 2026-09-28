@@ -9,6 +9,14 @@ rustup target add \
   x86_64-linux-android
 ```
 
+## iOS
+### Requirements
+```bash
+rustup target add \
+    aarch64-apple-ios-sim \
+    aarch64-apple-ios
+```
+
 ### Generate .so
 ```bash
 make so
