@@ -496,7 +496,12 @@ pub fn v1_calculate_segments(
     let x2 = ATTACHMENT_SEG_N_HEADER_SIZE;
 
     let n = ((4*N) - (3*p) + (3*x1 as u32)).div_ceil((3*p) - (3*x2 as u32));
-    n + 1
+
+    if n > 6312 {
+        n + 2
+    } else {
+        n + 1
+    }
 }
 
 #[test]
